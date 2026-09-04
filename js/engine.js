@@ -342,8 +342,7 @@ export class BattleEngine {
         this.particlePool.currentIndex = 0;
         this.mapManager.clear();
         this.flowFieldManager.rebuildCostField(this.mapManager);
-        this.flowFieldManager.redField.reset();
-        this.flowFieldManager.blueField.reset();
+        this.flowFieldManager.reset();
         this.scenarioDirector.clear();
         this.tweaker.clear();
     }

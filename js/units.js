@@ -101,11 +101,11 @@ export class Unit {
         let moveX = 0;
         let moveY = 0;
 
-        // 진영별 유동장(Flow Field) 방향 벡터 샘플링
+        // 진영별 & 크기별 유동장(Flow Field) 방향 벡터 자동 샘플링 (radius 기반 1x1 vs 2x2 자동 분기)
         let flowX = 0;
         let flowY = 0;
         if (flowFieldManager) {
-            const flow = flowFieldManager.getFlowVector(this.x, this.y, this.faction);
+            const flow = flowFieldManager.getFlowVector(this.x, this.y, this.faction, this.radius);
             flowX = flow.x;
             flowY = flow.y;
         }

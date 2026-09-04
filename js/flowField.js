@@ -1,10 +1,28 @@
 /**
- * flowField.js - 무한 맵 지원 동적 로컬 유동장 (Dynamic Floating Flow Field)
+ * flowField.js - 유닛 크기별 다중 클리어런스 동적 로컬 유동장 (Multi-Clearance Flow Field)
  * 
- * 전 세계가 무한히 확장되더라도 연산량 폭발 없이 항상 O(1) 성능을 사수하기 위해
- * 현재 교전이 벌어지는 활성 전투 구역을 중심으로 동적 윈도우(80x60 = 4,800 셀)를
- * 유동적으로 이동시키며 진영별 다중 목적지 Dijkstra 최단 우회 경로를 생성합니다.
+ * - Tier 1 (1x1 규격 / 소형·보병): 1칸(48px) 폭의 좁은 샛길/성문 통과
+ * - Tier 2 (2x2 규격 / 중형·탱커): 2칸(96px) 이상의 일반 도로 통과 (Dilation 1셀)
+ * - Tier 3 (3x3 규격 / 초대형·보스·전함): 3칸(144px) 이상의 광장/대로만 통과 (Dilation 2셀)
+ * 
+ * 신규 유닛 추가 시 radius를 기준으로 Tier 1~3으로 100% 자동 분류되며,
+ * 상위 티어가 막힌 경우 하위 티어로 안전하게 계층형 폴백(Hierarchical Fallback)합니다.
  */
+
+export const CLEARANCE_TIERS = {
+    SMALL: 1,  // 1x1 규격 (반지름 <= 16px: 소총수, 저격수, 샷건, 화염, 로켓, 러너, 자폭체, 스피터, 크롤러 등)
+    MEDIUM: 2, // 2x2 규격 (16px < 반지름 <= 32px: 탱커 브루트(22), 미니건 터렛(18) 등)
+    HUGE: 3    // 3x3 규격 (반지름 > 32px: 메카 타이탄(44) 및 향후 초대형 전함/요새)
+};
+
+/**
+ * 유닛의 반지름(radius)을 기준으로 적절한 클리어런스 티어를 자동 분류
+ */
+export function getClearanceTier(radius) {
+    if (radius <= 16) return CLEARANCE_TIERS.SMALL;
+    if (radius <= 32) return CLEARANCE_TIERS.MEDIUM;
+    return CLEARANCE_TIERS.HUGE;
+}
 
 export class FlowField {
     constructor(cols, rows) {
@@ -45,13 +63,32 @@ export class FlowFieldManager {
         this.originTileX = -Math.floor(this.cols / 2);
         this.originTileY = -Math.floor(this.rows / 2);
 
-        // 1. 공통 비용 필드 (Shared Cost Field: 1=보통, 4=바리케이드, 255=벽)
-        this.costField = new Uint8Array(this.totalCells);
-        this.costField.fill(1);
+        // 1. 크기 티어별 비용 필드 (Cost Field 1, 2, 3)
+        // - costFields[1] (1x1): 원본 벽(255), 바리케이드(4)
+        // - costFields[2] (2x2): 벽 1셀 팽창 (1칸 골목 차단, 2칸 도로 필요)
+        // - costFields[3] (3x3): 벽 2셀 팽창 (1~2칸 통로 차단, 3칸 대로 필요)
+        this.costFields = {
+            [CLEARANCE_TIERS.SMALL]: new Uint8Array(this.totalCells),
+            [CLEARANCE_TIERS.MEDIUM]: new Uint8Array(this.totalCells),
+            [CLEARANCE_TIERS.HUGE]: new Uint8Array(this.totalCells)
+        };
+        this.costFields[1].fill(1);
+        this.costFields[2].fill(1);
+        this.costFields[3].fill(1);
 
-        // 2. 진영별 분리 유동장 (RED & BLUE)
-        this.redField = new FlowField(this.cols, this.rows);   // RED 유닛용: 목적지 = BLUE 유닛
-        this.blueField = new FlowField(this.cols, this.rows);  // BLUE 유닛용: 목적지 = RED 유닛
+        // 2. 진영별 & 크기 티어별 분리 유동장 (RED & BLUE x [1x1, 2x2, 3x3])
+        this.fields = {
+            red: {
+                [CLEARANCE_TIERS.SMALL]: new FlowField(this.cols, this.rows),
+                [CLEARANCE_TIERS.MEDIUM]: new FlowField(this.cols, this.rows),
+                [CLEARANCE_TIERS.HUGE]: new FlowField(this.cols, this.rows)
+            },
+            blue: {
+                [CLEARANCE_TIERS.SMALL]: new FlowField(this.cols, this.rows),
+                [CLEARANCE_TIERS.MEDIUM]: new FlowField(this.cols, this.rows),
+                [CLEARANCE_TIERS.HUGE]: new FlowField(this.cols, this.rows)
+            }
+        };
 
         // 3. Zero-GC Dijkstra BFS 탐색 큐 (재사용 버퍼)
         this.queue = new Int32Array(this.totalCells * 2);
@@ -63,9 +100,31 @@ export class FlowFieldManager {
         // 디버그 시각화 설정
         this.debugRender = false;
         this.debugFaction = "red"; // "red" | "blue"
+        this.debugTier = CLEARANCE_TIERS.SMALL; // 1 (1x1) | 2 (2x2) | 3 (3x3)
 
-        // 타일맵 참조
+        // 하위 호환용 참조
         this.lastMapManager = null;
+    }
+
+    get redField() {
+        return this.fields.red[this.debugTier] || this.fields.red[CLEARANCE_TIERS.SMALL];
+    }
+
+    get blueField() {
+        return this.fields.blue[this.debugTier] || this.fields.blue[CLEARANCE_TIERS.SMALL];
+    }
+
+    /**
+     * 모든 진영 및 크기 티어 유동장 리셋
+     */
+    reset() {
+        for (const f of ["red", "blue"]) {
+            for (const t of [CLEARANCE_TIERS.SMALL, CLEARANCE_TIERS.MEDIUM, CLEARANCE_TIERS.HUGE]) {
+                if (this.fields[f][t]) {
+                    this.fields[f][t].reset();
+                }
+            }
+        }
     }
 
     /**
@@ -86,7 +145,7 @@ export class FlowFieldManager {
     }
 
     /**
-     * 현재 동적 윈도우 중심을 갱신하고 비용 필드(Cost Field) 재구축
+     * 현재 동적 윈도우 중심을 갱신하고 3개 티어의 비용 필드(Cost Field) 재구축
      */
     rebuildCostField(mapManager = null, centerTileX = 0, centerTileY = 0) {
         if (mapManager) {
@@ -97,10 +156,11 @@ export class FlowFieldManager {
         this.originTileX = Math.floor(centerTileX - this.cols / 2);
         this.originTileY = Math.floor(centerTileY - this.rows / 2);
 
-        this.costField.fill(1);
+        // 1. Tier 1 (1x1 소형) 비용 필드 구축
+        const c1 = this.costFields[CLEARANCE_TIERS.SMALL];
+        c1.fill(1);
 
         if (mgr) {
-            // 현재 윈도우 영역 안의 타일들만 초고속 조회하여 비용 필드 구축
             for (let ly = 0; ly < this.rows; ly++) {
                 const worldCy = this.originTileY + ly;
                 const rowOffset = ly * this.cols;
@@ -109,26 +169,61 @@ export class FlowFieldManager {
                     const tile = mgr.getTile(worldCx, worldCy);
 
                     if (tile === 1) { // WALL
-                        this.costField[rowOffset + lx] = 255;
+                        c1[rowOffset + lx] = 255;
                     } else if (tile === 2) { // BARRICADE
-                        this.costField[rowOffset + lx] = 4;
+                        c1[rowOffset + lx] = 4;
                     }
                 }
             }
         }
 
+        // 2. Tier 2 (2x2 중형) 비용 필드 생성 (Dilation 1: 벽 주변 8방향 1셀 팽창)
+        const c2 = this.costFields[CLEARANCE_TIERS.MEDIUM];
+        c2.set(c1);
+        this.applyObstacleDilation(c1, c2);
+
+        // 3. Tier 3 (3x3 초대형) 비용 필드 생성 (Dilation 2: 2셀 팽창)
+        const c3 = this.costFields[CLEARANCE_TIERS.HUGE];
+        c3.set(c2);
+        this.applyObstacleDilation(c2, c3);
+
         this.updateTimer = this.updateInterval;
     }
 
     /**
-     * 매 프레임 업데이트 (활성 전투 구역 추적 및 BFS 갱신)
+     * 벽 팽창(Obstacle Dilation) 연산: srcField의 벽(255) 주변 8방향을 dstField에서 255로 마킹
+     */
+    applyObstacleDilation(srcField, dstField) {
+        const cols = this.cols;
+        const rows = this.rows;
+        const dx = [1, -1, 0, 0, 1, -1, 1, -1];
+        const dy = [0, 0, 1, -1, 1, 1, -1, -1];
+
+        for (let ly = 0; ly < rows; ly++) {
+            const rowOffset = ly * cols;
+            for (let lx = 0; lx < cols; lx++) {
+                if (srcField[rowOffset + lx] === 255) {
+                    for (let d = 0; d < 8; d++) {
+                        const nx = lx + dx[d];
+                        const ny = ly + dy[d];
+                        if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+                            dstField[ny * cols + nx] = 255;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * 매 프레임 업데이트 (활성 전투 구역 추적 및 3개 티어 BFS 갱신)
      */
     update(dt, units = [], camera = null) {
         this.updateTimer += dt;
         if (this.updateTimer < this.updateInterval) return;
         this.updateTimer = 0;
 
-        // 1. 활성 전투 중심점 계산 (생존 유닛 평균 위치 또는 카메라 중심)
+        // 1. 활성 전투 중심점 계산
         let centerX = camera ? camera.x : 0;
         let centerY = camera ? camera.y : 0;
 
@@ -136,7 +231,7 @@ export class FlowFieldManager {
             let sumX = 0;
             let sumY = 0;
             let aliveCount = 0;
-            const sampleStep = Math.max(1, Math.floor(units.length / 80)); // 샘플링으로 초고속 계산
+            const sampleStep = Math.max(1, Math.floor(units.length / 80));
 
             for (let i = 0; i < units.length; i += sampleStep) {
                 const u = units[i];
@@ -180,17 +275,21 @@ export class FlowFieldManager {
             }
         }
 
-        // 3. RED 유동장 계산 (목적지: 윈도우 내 BLUE 유닛들)
-        this.computeFieldForFaction(this.redField, blueGoals);
+        // 3. RED 유동장 계산 (목적지: BLUE 유닛들, 3개 티어 순회)
+        for (const tier of [CLEARANCE_TIERS.SMALL, CLEARANCE_TIERS.MEDIUM, CLEARANCE_TIERS.HUGE]) {
+            this.computeField(this.fields.red[tier], blueGoals, this.costFields[tier], tier);
+        }
 
-        // 4. BLUE 유동장 계산 (목적지: 윈도우 내 RED 유닛들)
-        this.computeFieldForFaction(this.blueField, redGoals);
+        // 4. BLUE 유동장 계산 (목적지: RED 유닛들, 3개 티어 순회)
+        for (const tier of [CLEARANCE_TIERS.SMALL, CLEARANCE_TIERS.MEDIUM, CLEARANCE_TIERS.HUGE]) {
+            this.computeField(this.fields.blue[tier], redGoals, this.costFields[tier], tier);
+        }
     }
 
     /**
      * 특정 유동장에 대해 다중 목적지(Multi-Source) Dijkstra BFS 및 벡터장 생성
      */
-    computeFieldForFaction(flowField, targetCells) {
+    computeField(flowField, targetCells, costField, tier = 1) {
         flowField.reset();
 
         if (targetCells.length === 0) {
@@ -201,16 +300,45 @@ export class FlowFieldManager {
         let qHead = 0;
         let qTail = 0;
 
-        // 1. 모든 타겟 셀 위치를 목적지(Sink, 거리 0)로 큐에 삽입
+        // 1. 통과 가능한 모든 타겟 셀 위치를 목적지(Sink, 거리 0)로 큐에 삽입
         const markedGoalCells = new Uint8Array(this.totalCells);
 
         for (let i = 0; i < targetCells.length; i++) {
             const idx = targetCells[i].index;
-            if (this.costField[idx] < 255 && markedGoalCells[idx] === 0) {
+            if (costField[idx] < 255 && markedGoalCells[idx] === 0) {
                 markedGoalCells[idx] = 1;
                 flowField.integrationField[idx] = 0;
                 this.queue[qTail++] = idx;
                 flowField.hasGoals = true;
+            }
+        }
+
+        // 상위 티어(2x2, 3x3)에서 타겟들이 좁은 골목(255) 안에 있어 직접 싱크가 없는 경우,
+        // 타겟 주변의 통과 가능 셀들을 탐색하여 입구 지점을 목적지로 근사
+        if (!flowField.hasGoals && tier > 1) {
+            const cols = this.cols;
+            const rows = this.rows;
+            const searchDist = tier === CLEARANCE_TIERS.HUGE ? 3 : 2;
+
+            for (let i = 0; i < targetCells.length; i++) {
+                const cx = targetCells[i].lx;
+                const cy = targetCells[i].ly;
+
+                for (let dy = -searchDist; dy <= searchDist; dy++) {
+                    for (let dx = -searchDist; dx <= searchDist; dx++) {
+                        const nx = cx + dx;
+                        const ny = cy + dy;
+                        if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+                            const nIdx = ny * cols + nx;
+                            if (costField[nIdx] < 255 && markedGoalCells[nIdx] === 0) {
+                                markedGoalCells[nIdx] = 1;
+                                flowField.integrationField[nIdx] = 0;
+                                this.queue[qTail++] = nIdx;
+                                flowField.hasGoals = true;
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -222,7 +350,6 @@ export class FlowFieldManager {
         // 2. 다중 출발점 Dijkstra BFS 확산 (8방향 이동)
         const cols = this.cols;
         const rows = this.rows;
-        const costField = this.costField;
         const integrationField = flowField.integrationField;
 
         const dx = [1, -1, 0, 0, 1, -1, 1, -1];
@@ -330,20 +457,14 @@ export class FlowFieldManager {
     }
 
     /**
-     * 월드 좌표 (x, y)에서 해당 진영의 최적 이동 방향 벡터 샘플링 (Bilinear Interpolation)
+     * 특정 단일 유동장에서 (x, y)의 쌍선형 보간 벡터 샘플링 헬퍼
      */
-    getFlowVector(x, y, faction) {
-        const field = faction === "red" ? this.redField : this.blueField;
-        if (!field.valid) return { x: 0, y: 0 };
-
-        const localTileX = (x / this.cellSize) - this.originTileX - 0.5;
-        const localTileY = (y / this.cellSize) - this.originTileY - 0.5;
-
+    sampleVector(field, localTileX, localTileY) {
         const x0 = Math.floor(localTileX);
         const y0 = Math.floor(localTileY);
 
         if (x0 < 0 || x0 >= this.cols - 1 || y0 < 0 || y0 >= this.rows - 1) {
-            return { x: 0, y: 0 }; // 윈도우 밖은 직선 추적으로 전환
+            return null;
         }
 
         const x1 = x0 + 1;
@@ -366,6 +487,34 @@ export class FlowFieldManager {
         if (len > 0.05) {
             return { x: vx / len, y: vy / len };
         }
+        return null;
+    }
+
+    /**
+     * 월드 좌표 (x, y)에서 해당 진영 및 유닛 크기(radius)에 맞는 최적 이동 방향 벡터 샘플링
+     * (Tier 3 -> Tier 2 -> Tier 1 계층적 안전 폴백 적용)
+     */
+    getFlowVector(x, y, faction, radius = 10) {
+        const tier = getClearanceTier(radius);
+        const factionFields = this.fields[faction];
+        if (!factionFields) return { x: 0, y: 0 };
+
+        const localTileX = (x / this.cellSize) - this.originTileX - 0.5;
+        const localTileY = (y / this.cellSize) - this.originTileY - 0.5;
+
+        // 윈도우 바깥은 직선 추적으로 전환
+        if (localTileX < 0 || localTileX >= this.cols - 1 || localTileY < 0 || localTileY >= this.rows - 1) {
+            return { x: 0, y: 0 };
+        }
+
+        // 유닛 티어부터 시작하여 하위 티어로 순차적 폴백(Hierarchical Fallback)
+        for (let t = tier; t >= 1; t--) {
+            const field = factionFields[t];
+            if (field && field.valid) {
+                const vec = this.sampleVector(field, localTileX, localTileY);
+                if (vec) return vec;
+            }
+        }
 
         return { x: 0, y: 0 };
     }
@@ -373,10 +522,49 @@ export class FlowFieldManager {
     /**
      * 유동장 디버그 오버레이 렌더링
      */
-    renderDebug(ctx, faction = null) {
+    renderDebug(ctx, faction = null, tier = null) {
         const targetFaction = faction || this.debugFaction;
-        const field = targetFaction === "red" ? this.redField : this.blueField;
-        const arrowColor = targetFaction === "red" ? "rgba(239, 68, 68, 0.6)" : "rgba(14, 165, 233, 0.6)";
+        const targetTier = tier || this.debugTier;
+        const factionFields = this.fields[targetFaction];
+        if (!factionFields) return;
+
+        const field = factionFields[targetTier] || factionFields[CLEARANCE_TIERS.SMALL];
+        const costField = this.costFields[targetTier] || this.costFields[CLEARANCE_TIERS.SMALL];
+
+        let arrowColor = "rgba(14, 165, 233, 0.6)";
+        let lineWidth = 1.5;
+        let headLen = 4;
+
+        if (targetFaction === "red") {
+            if (targetTier === CLEARANCE_TIERS.HUGE) {
+                arrowColor = "rgba(185, 28, 28, 0.95)";
+                lineWidth = 3.0;
+                headLen = 6.5;
+            } else if (targetTier === CLEARANCE_TIERS.MEDIUM) {
+                arrowColor = "rgba(220, 38, 38, 0.8)";
+                lineWidth = 2.2;
+                headLen = 5.0;
+            } else {
+                arrowColor = "rgba(239, 68, 68, 0.6)";
+                lineWidth = 1.5;
+                headLen = 4.0;
+            }
+        } else {
+            if (targetTier === CLEARANCE_TIERS.HUGE) {
+                arrowColor = "rgba(3, 105, 161, 0.95)";
+                lineWidth = 3.0;
+                headLen = 6.5;
+            } else if (targetTier === CLEARANCE_TIERS.MEDIUM) {
+                arrowColor = "rgba(2, 132, 199, 0.8)";
+                lineWidth = 2.2;
+                headLen = 5.0;
+            } else {
+                arrowColor = "rgba(14, 165, 233, 0.6)";
+                lineWidth = 1.5;
+                headLen = 4.0;
+            }
+        }
+
         const goalColor = targetFaction === "red" ? "rgba(239, 68, 68, 0.25)" : "rgba(14, 165, 233, 0.25)";
 
         ctx.save();
@@ -392,9 +580,12 @@ export class FlowFieldManager {
                 const px = worldCx * this.cellSize + half;
                 const py = worldCy * this.cellSize + half;
 
-                const cost = this.costField[idx];
+                const cost = costField[idx];
                 if (cost === 255) {
-                    ctx.fillStyle = "rgba(51, 65, 85, 0.25)";
+                    const blockFill = targetTier === CLEARANCE_TIERS.HUGE
+                        ? "rgba(127, 29, 29, 0.35)"
+                        : (targetTier === CLEARANCE_TIERS.MEDIUM ? "rgba(153, 27, 27, 0.25)" : "rgba(51, 65, 85, 0.25)");
+                    ctx.fillStyle = blockFill;
                     ctx.fillRect(worldCx * this.cellSize, worldCy * this.cellSize, this.cellSize, this.cellSize);
                     continue;
                 } else if (cost > 1) {
@@ -416,14 +607,13 @@ export class FlowFieldManager {
                         const toY = py + vy * arrowLen;
 
                         ctx.strokeStyle = arrowColor;
-                        ctx.lineWidth = 1.5;
+                        ctx.lineWidth = lineWidth;
                         ctx.beginPath();
                         ctx.moveTo(px, py);
                         ctx.lineTo(toX, toY);
                         ctx.stroke();
 
                         const angle = Math.atan2(vy, vx);
-                        const headLen = 4;
                         ctx.beginPath();
                         ctx.moveTo(toX, toY);
                         ctx.lineTo(toX - headLen * Math.cos(angle - Math.PI / 6), toY - headLen * Math.sin(angle - Math.PI / 6));

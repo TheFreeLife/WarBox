@@ -482,14 +482,27 @@ window.addEventListener("DOMContentLoaded", () => {
             btnToggleTweaker.click();
         } else if (key === "F") {
             engine.flowFieldManager.debugRender = !engine.flowFieldManager.debugRender;
+            const tierText = engine.flowFieldManager.debugTier === 1 ? "1x1 소형" : "2x2 대형";
             const mode = engine.flowFieldManager.debugRender 
-                ? `ON (${engine.flowFieldManager.debugFaction.toUpperCase()} 진영, Tab으로 전환)` 
+                ? `ON [${engine.flowFieldManager.debugFaction.toUpperCase()} | ${tierText}] (Tab:진영, G:크기)` 
                 : "OFF";
-            showToast(`유동장(Flow Field) 시각화: ${mode}`);
+            showToast(`유동장 시각화: ${mode}`);
         } else if (e.key === "Tab" && engine.flowFieldManager.debugRender) {
             e.preventDefault();
             engine.flowFieldManager.debugFaction = engine.flowFieldManager.debugFaction === "red" ? "blue" : "red";
-            showToast(`유동장 표시 진영: ${engine.flowFieldManager.debugFaction.toUpperCase()}`);
+            const tierText = engine.flowFieldManager.debugTier === 1 ? "1x1 소형" : "2x2 대형";
+            showToast(`유동장 표시: ${engine.flowFieldManager.debugFaction.toUpperCase()} [${tierText}]`);
+        } else if (key === "G" && engine.flowFieldManager.debugRender) {
+            let nextTier = engine.flowFieldManager.debugTier + 1;
+            if (nextTier > 3) nextTier = 1;
+            engine.flowFieldManager.debugTier = nextTier;
+
+            let tierText = "";
+            if (nextTier === 1) tierText = "Tier 1: 1x1 소형/보병 (1칸 샛길 통과)";
+            else if (nextTier === 2) tierText = "Tier 2: 2x2 중형/탱커 (2칸 도로 통과)";
+            else tierText = "Tier 3: 3x3 초대형/타이탄 (3칸 광장/대로만 통과)";
+
+            showToast(`유동장 규격: <strong>${tierText}</strong>`);
         } else if (["1", "2", "3", "4", "5"].includes(key)) {
             const idx = parseInt(key) - 1;
             if (YOUTUBE_PRESETS[idx]) {
