@@ -42,6 +42,7 @@ body.clean-recording-mode #top-hud,
 body.clean-recording-mode #bottom-bar,
 body.clean-recording-mode #side-drawer,
 body.clean-recording-mode #scenario-bar,
+body.clean-recording-mode #game-toast,
 body.clean-recording-mode .shortcut-hint,
 body.clean-recording-mode .modal-overlay {
     opacity: 0 !important;
@@ -436,4 +437,60 @@ input[type="range"] {
     border-radius: 4px;
     color: #f8fafc;
     font-weight: bold;
+}
+
+/* =========================================================
+   인게임 알림 토스트 배너 (신의 권능 / 시스템 메시지)
+   ========================================================= */
+.game-toast {
+    position: absolute;
+    top: 96px;
+    left: 50%;
+    transform: translate(-50%, -12px) scale(0.95);
+    background: rgba(15, 23, 42, 0.9);
+    border: 1.5px solid var(--panel-border);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    padding: 9px 22px;
+    border-radius: 9999px;
+    color: var(--text-main);
+    font-size: 13.5px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.22s;
+    z-index: 120;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.game-toast.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translate(-50%, 0) scale(1);
+}
+
+.game-toast.nuke {
+    border-color: #f43f5e;
+    color: #fecdd3;
+    background: rgba(24, 15, 22, 0.92);
+    box-shadow: 0 0 24px rgba(244, 63, 94, 0.35), 0 12px 36px rgba(0, 0, 0, 0.6);
+}
+
+.game-toast.blackhole {
+    border-color: #c084fc;
+    color: #f3e8ff;
+    background: rgba(22, 15, 36, 0.92);
+    box-shadow: 0 0 24px rgba(192, 132, 252, 0.35), 0 12px 36px rgba(0, 0, 0, 0.6);
+}
+
+.game-toast.info {
+    border-color: var(--accent-blue);
+    color: #e0f2fe;
+    box-shadow: 0 0 24px var(--accent-blue-glow), 0 12px 36px rgba(0, 0, 0, 0.6);
 }

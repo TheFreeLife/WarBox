@@ -170,6 +170,104 @@ class SoundFX {
     }
 
     /**
+     * 초대형 전술 핵폭발 사운드 (3단 레이어 초저음 서브베이스 펀치 + 6.5초 대지진 럼블)
+     */
+    playNukeSound() {
+        if (this.isMuted || !this.initialized) return;
+        const now = this.ctx.currentTime;
+        const duration = 6.5;
+
+        // [레이어 1] 심장/가슴을 때리는 서브베이스 펀치 (80Hz -> 16Hz)
+        const subOsc1 = this.ctx.createOscillator();
+        const subGain1 = this.ctx.createGain();
+        subOsc1.type = "sine";
+        subOsc1.frequency.setValueAtTime(80, now);
+        subOsc1.frequency.exponentialRampToValueAtTime(16, now + 2.5);
+        subGain1.gain.setValueAtTime(1.0, now);
+        subGain1.gain.exponentialRampToValueAtTime(0.01, now + 2.5);
+        subOsc1.connect(subGain1);
+        subGain1.connect(this.masterGain);
+        subOsc1.start(now);
+        subOsc1.stop(now + 2.5);
+
+        // [레이어 2] 지축을 흔드는 초저주파 지진 파동음 (46Hz -> 10Hz)
+        const subOsc2 = this.ctx.createOscillator();
+        const subGain2 = this.ctx.createGain();
+        subOsc2.type = "triangle";
+        subOsc2.frequency.setValueAtTime(46, now);
+        subOsc2.frequency.exponentialRampToValueAtTime(10, now + 4.0);
+        subGain2.gain.setValueAtTime(0.85, now);
+        subGain2.gain.exponentialRampToValueAtTime(0.01, now + 4.0);
+        subOsc2.connect(subGain2);
+        subGain2.connect(this.masterGain);
+        subOsc2.start(now);
+        subOsc2.stop(now + 4.0);
+
+        // [레이어 3] 6.5초간 지속되는 묵직한 초중량 폭풍 노이즈 럼블 (쿠구구구궁...)
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = this.createNoiseBuffer(duration);
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = "lowpass";
+        filter.frequency.setValueAtTime(480, now);
+        filter.frequency.exponentialRampToValueAtTime(25, now + duration);
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(1.0, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.masterGain);
+
+        noise.start(now);
+        noise.stop(now + duration);
+    }
+
+    /**
+     * 육중한 핵폭탄 공중 급강하 사운드 (묵직한 공기 마찰풍 + 하강 휘파람)
+     */
+    playFallingWhistle(duration = 1.8) {
+        if (this.isMuted || !this.initialized) return;
+        const now = this.ctx.currentTime;
+
+        // 1. 하강 휘파람음 (더 묵직한 900Hz -> 220Hz 톤)
+        const osc = this.ctx.createOscillator();
+        const oscGain = this.ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(950, now);
+        osc.frequency.exponentialRampToValueAtTime(200, now + duration);
+
+        oscGain.gain.setValueAtTime(0.01, now);
+        oscGain.gain.linearRampToValueAtTime(0.35, now + duration * 0.75);
+        oscGain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+
+        osc.connect(oscGain);
+        oscGain.connect(this.masterGain);
+        osc.start(now);
+        osc.stop(now + duration);
+
+        // 2. 묵직한 공기 마찰 바람 소리 (Wind Rush Whoosh)
+        const wind = this.ctx.createBufferSource();
+        wind.buffer = this.createNoiseBuffer(duration);
+        const windFilter = this.ctx.createBiquadFilter();
+        windFilter.type = "bandpass";
+        windFilter.frequency.setValueAtTime(400, now);
+        windFilter.frequency.exponentialRampToValueAtTime(180, now + duration);
+
+        const windGain = this.ctx.createGain();
+        windGain.gain.setValueAtTime(0.01, now);
+        windGain.gain.linearRampToValueAtTime(0.28, now + duration * 0.8);
+        windGain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+
+        wind.connect(windFilter);
+        windFilter.connect(windGain);
+        windGain.connect(this.masterGain);
+        wind.start(now);
+        wind.stop(now + duration);
+    }
+
+    /**
      * 화염방사기 쉬익 소리
      */
     playFlame() {

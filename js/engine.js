@@ -150,6 +150,9 @@ export class BattleEngine {
         // 파티클 풀 업데이트
         this.particlePool.update(dt, this.stampBuffer);
 
+        // 신의 권능(낙하 핵폭탄 등) 업데이트
+        this.tweaker.update(dt);
+
         // 시나리오 디렉터 타임라인 업데이트
         this.scenarioDirector.update(dt);
     }
@@ -184,6 +187,9 @@ export class BattleEngine {
         // 8. 파티클 풀 렌더링 (총구 화염, 피 튀김, 충격파)
         this.particlePool.render(ctx);
 
+        // 8.5. 신의 권능 렌더링 (낙하 중인 실물 핵폭탄 및 지면 타겟 조준선)
+        this.tweaker.render(ctx);
+
         // 9. 야간 손전등(Flashlight) 모드 연출
         if (this.tweaker.atmosphere === "night") {
             this.renderNightVision(ctx);
@@ -194,6 +200,23 @@ export class BattleEngine {
 
         // 10. 상단 시네마틱 자막 배너 (스크린 좌표)
         this.scenarioDirector.renderBanner(ctx, w);
+
+        // 11. 화면 전체 섬광 및 열핵 조명 효과 (지속적인 백열 과노출 Bloom 연출)
+        if (this.camera.flashAlpha > 0.01) {
+            ctx.save();
+            ctx.fillStyle = this.camera.flashColor || "#ffffff";
+            ctx.globalAlpha = Math.min(1.0, this.camera.flashAlpha);
+            ctx.fillRect(0, 0, w, h);
+
+            // 핵폭발 고온 백열 구간(0.6s ~ 3.8s)에는 가산 혼합(lighter)으로 눈부신 빛 번짐(Overexposure Bloom) 추가
+            if (this.camera.flashMode === 'nuclear' && this.camera.nuclearFlashElapsed > 0.6 && this.camera.nuclearFlashElapsed < 3.8) {
+                ctx.globalCompositeOperation = "lighter";
+                ctx.globalAlpha = Math.min(0.45, this.camera.flashAlpha * 0.55);
+                ctx.fillStyle = "#fef08a";
+                ctx.fillRect(0, 0, w, h);
+            }
+            ctx.restore();
+        }
     }
 
     renderNightVision(ctx) {
@@ -255,5 +278,8 @@ export class BattleEngine {
         this.projectilePool.clear();
         this.stampBuffer.clear();
         this.particlePool.currentIndex = 0;
+        this.mapManager.clear();
+        this.scenarioDirector.clear();
+        this.tweaker.clear();
     }
 }

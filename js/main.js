@@ -27,6 +27,35 @@ window.addEventListener("DOMContentLoaded", () => {
     let brushCount = 10;
     let activeGodPower = null;
 
+    // 인게임 알림 토스트 컨트롤러
+    const gameToast = document.getElementById("game-toast");
+    let toastTimeout = null;
+
+    function showToast(message, type = "info", duration = 4000) {
+        if (!gameToast) return;
+        if (toastTimeout) {
+            clearTimeout(toastTimeout);
+            toastTimeout = null;
+        }
+        gameToast.className = `game-toast ${type} show`;
+        gameToast.innerHTML = message;
+
+        if (duration > 0) {
+            toastTimeout = setTimeout(() => {
+                hideToast();
+            }, duration);
+        }
+    }
+
+    function hideToast() {
+        if (!gameToast) return;
+        if (toastTimeout) {
+            clearTimeout(toastTimeout);
+            toastTimeout = null;
+        }
+        gameToast.classList.remove("show");
+    }
+
     // 2. 동적 유닛 덱 생성 (unitData.js와 자동 연동)
     const unitDeckContainer = document.getElementById("unit-deck-container");
 
@@ -48,6 +77,7 @@ window.addEventListener("DOMContentLoaded", () => {
             card.addEventListener("click", () => {
                 selectedUnitId = unit.id;
                 activeGodPower = null;
+                hideToast();
                 document.querySelectorAll(".unit-card").forEach(c => c.classList.remove("active"));
                 card.classList.add("active");
             });
@@ -119,10 +149,12 @@ window.addEventListener("DOMContentLoaded", () => {
             if (activeGodPower === "nuke") {
                 engine.tweaker.triggerNuke(worldPos.x, worldPos.y);
                 activeGodPower = null;
+                hideToast();
                 return;
             } else if (activeGodPower === "blackhole") {
                 engine.tweaker.triggerBlackHole(worldPos.x, worldPos.y);
                 activeGodPower = null;
+                hideToast();
                 return;
             }
 
@@ -142,6 +174,12 @@ window.addEventListener("DOMContentLoaded", () => {
                 selectedFaction
             );
         } else if (e.button === 1 || e.button === 2) {
+            // 우클릭 시 신의 권능 취소
+            if (activeGodPower) {
+                activeGodPower = null;
+                hideToast();
+            }
+
             // 휠 클릭 또는 우클릭: 카메라 패닝
             isRightMouseDown = true;
             dragStartX = e.clientX;
@@ -233,6 +271,9 @@ window.addEventListener("DOMContentLoaded", () => {
     const btnClear = document.getElementById("btn-clear");
     btnClear.addEventListener("click", () => {
         engine.clearAll();
+        document.getElementById("scenario-title").textContent = "샌드박스 (초기 상태)";
+        document.getElementById("scenario-time").textContent = "00:00";
+        document.getElementById("scenario-next").textContent = "유닛을 배치하거나 프리셋(1~5)을 로드하세요";
     });
 
     // 7. 사이드 패널 토글 (맵 에디터 & 변수 조절기)
@@ -297,12 +338,16 @@ window.addEventListener("DOMContentLoaded", () => {
     // 신의 권능 버튼
     document.getElementById("btn-god-nuke").addEventListener("click", () => {
         activeGodPower = "nuke";
-        alert("원하는 지면을 클릭하면 전술 핵이 투하됩니다!");
+        showToast("☢️ <strong>전술 핵 타격 모드</strong>: 지면을 클릭하세요 (우클릭/ESC 취소)", "nuke", 0);
+        tweakerPanel.classList.add("hidden");
+        btnToggleTweaker.classList.remove("active");
     });
 
     document.getElementById("btn-god-blackhole").addEventListener("click", () => {
         activeGodPower = "blackhole";
-        alert("원하는 지면을 클릭하면 블랙홀이 생성됩니다!");
+        showToast("🕳️ <strong>블랙홀 생성 모드</strong>: 지면을 클릭하세요 (우클릭/ESC 취소)", "blackhole", 0);
+        tweakerPanel.classList.add("hidden");
+        btnToggleTweaker.classList.remove("active");
     });
 
     // 시나리오 프리셋 버튼 렌더링
@@ -321,14 +366,16 @@ window.addEventListener("DOMContentLoaded", () => {
         presetContainer.appendChild(btn);
     });
 
-    // 기본 시나리오 자동 로드
-    engine.scenarioDirector.loadScenario("outpost_defense");
-
     // 8. 전역 키보드 단축키
     window.addEventListener("keydown", (e) => {
         const key = e.key.toUpperCase();
 
-        if (key === "H") {
+        if (e.key === "Escape" || key === "ESCAPE") {
+            if (activeGodPower) {
+                activeGodPower = null;
+                hideToast();
+            }
+        } else if (key === "H") {
             engine.toggleCleanRecording();
         } else if (e.code === "Space") {
             e.preventDefault();
@@ -340,6 +387,10 @@ window.addEventListener("DOMContentLoaded", () => {
         } else if (key === "R") {
             btnAspect.click();
         } else if (key === "C") {
+            if (activeGodPower) {
+                activeGodPower = null;
+                hideToast();
+            }
             btnClear.click();
         } else if (key === "E") {
             btnToggleEditor.click();
@@ -381,6 +432,9 @@ window.addEventListener("DOMContentLoaded", () => {
             const s = String(sec % 60).padStart(2, '0');
             scenarioTimeEl.textContent = `${m}:${s}`;
             scenarioNextEl.textContent = engine.scenarioDirector.getNextEventInfo();
+        } else {
+            scenarioTimeEl.textContent = "00:00";
+            scenarioNextEl.textContent = "유닛을 배치하거나 프리셋(1~5)을 로드하세요";
         }
     }, 100);
 

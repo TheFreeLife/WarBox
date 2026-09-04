@@ -48,8 +48,14 @@ class Particle {
         this.alpha = Math.max(0, this.life);
 
         // 마찰력 감속
-        this.vx *= 0.92;
-        this.vy *= 0.92;
+        if (this.type === "nuke_smoke" || this.type === "smoke") {
+            this.vx *= 0.94;
+            this.vy *= 0.94;
+            this.vy -= 0.12; // 연기 상승 기류 효과
+        } else {
+            this.vx *= 0.92;
+            this.vy *= 0.92;
+        }
 
         // 탄피 바닥 바운스 및 배경 스탬프
         if (this.type === "casing") {
@@ -85,19 +91,34 @@ class Particle {
         ctx.save();
         ctx.globalAlpha = this.alpha;
 
-        if (this.type === "shockwave") {
-            // 대폭발 충격파 링
+        if (this.type === "shockwave" || this.type === "nuke_shockwave") {
+            // 대폭발 충격파 링 (두껍고 묵직한 초열 압력파 링)
             ctx.strokeStyle = this.color;
-            ctx.lineWidth = Math.max(1, 4 * this.life);
+            const lineW = this.type === "nuke_shockwave" ? Math.max(3.5, 24 * this.life) : Math.max(1, 4 * this.life);
+            ctx.lineWidth = lineW;
             ctx.beginPath();
-            ctx.arc(this.x, this.y, this.size * (1 - this.life + 0.1), 0, Math.PI * 2);
+            ctx.arc(this.x, this.y, this.size * (1 - this.life + 0.04), 0, Math.PI * 2);
             ctx.stroke();
+        } else if (this.type === "nuke_fireball") {
+            // 중심부에서 거대하게 부풀어 오르는 초열 백열 플라즈마 화구
+            const growth = 1.0 + (1.0 - this.life) * 2.2;
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size * growth, 0, Math.PI * 2);
+            ctx.fill();
+        } else if (this.type === "nuke_smoke" || this.type === "smoke") {
+            // 시간이 지날수록 웅장하게 부풀어 오르는 짙은 연기 (크기 1.0 -> 4.5배)
+            const growth = 1.0 + (1.0 - this.life) * 3.5;
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size * growth, 0, Math.PI * 2);
+            ctx.fill();
         } else if (this.type === "casing") {
             // 황동 탄피 (작은 금색 막대)
             ctx.fillStyle = "#facc15";
             ctx.fillRect(this.x - 1.5, this.y - 0.75, 3, 1.5);
         } else {
-            // 일반 파티클 (피, 불꽃, 연기)
+            // 일반 파티클 (피, 불꽃, 스파크)
             ctx.fillStyle = this.color;
             ctx.beginPath();
             ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
@@ -192,6 +213,50 @@ export class BackgroundStampBuffer {
     }
 
     /**
+     * 핵폭발 초대형 그을음 및 파괴 분화구 (Crater) 영구 도장
+     */
+    stampNukeCrater(x, y, radius = 280) {
+        this.ctx.save();
+
+        // 1. 거대한 방사능 초열 그을음 (외곽 반투명 검은 재)
+        this.ctx.fillStyle = "rgba(10, 15, 26, 0.75)";
+        this.ctx.beginPath();
+        this.ctx.arc(x, y, radius * 1.25, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        // 2. 중간 열폭풍 연소 구역
+        this.ctx.fillStyle = "rgba(3, 7, 18, 0.9)";
+        this.ctx.beginPath();
+        this.ctx.arc(x, y, radius * 0.8, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        // 3. 중심부 칠흑의 파괴 분화구
+        this.ctx.fillStyle = "rgba(0, 0, 0, 0.98)";
+        this.ctx.beginPath();
+        this.ctx.arc(x, y, radius * 0.45, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        // 4. 사방으로 뻗어나간 지면 파열 균열선 (Cracks)
+        this.ctx.strokeStyle = "rgba(0, 0, 0, 0.85)";
+        this.ctx.lineWidth = 2.5;
+        for (let i = 0; i < 14; i++) {
+            const angle = (i / 14) * Math.PI * 2 + (Math.random() - 0.5) * 0.35;
+            const dist = radius * (0.6 + Math.random() * 0.65);
+            this.ctx.beginPath();
+            this.ctx.moveTo(x, y);
+            const midX = x + Math.cos(angle) * (dist * 0.5) + (Math.random() - 0.5) * 20;
+            const midY = y + Math.sin(angle) * (dist * 0.5) + (Math.random() - 0.5) * 20;
+            const endX = x + Math.cos(angle) * dist;
+            const endY = y + Math.sin(angle) * dist;
+            this.ctx.lineTo(midX, midY);
+            this.ctx.lineTo(endX, endY);
+            this.ctx.stroke();
+        }
+
+        this.ctx.restore();
+    }
+
+    /**
      * 메인 캔버스에 누적된 배경 1회 블릿
      */
     render(mainCtx) {
@@ -271,6 +336,100 @@ export class ParticlePool {
             const colors = ["#f97316", "#ef4444", "#fbbf24", "#475569"];
             const color = colors[Math.floor(Math.random() * colors.length)];
             this.spawn(x, y, Math.cos(angle) * speed, Math.sin(angle) * speed, size, color, 0.035, "spark");
+        }
+    }
+
+    /**
+     * 초대형 전술 핵폭발 초기 발동 (다중 압력파 + 거대 플라즈마 화구 + 1차 연기)
+     */
+    spawnNukeDetonation(x, y, radius = 380, stampBuffer) {
+        // 지면 초대형 분화구 & 균열 영구 도장
+        if (stampBuffer) {
+            stampBuffer.stampNukeCrater(x, y, radius * 0.85);
+        }
+
+        // 1. 초광속 1차 백색 초중량 충격파 링 (반경 620px)
+        this.spawn(x, y, 0, 0, radius * 1.65, "#ffffff", 0.02, "nuke_shockwave");
+        
+        // 2. 2차 주황/황금빛 초열 폭풍 충격파 링 (반경 480px)
+        this.spawn(x, y, 0, 0, radius * 1.25, "#fbbf24", 0.016, "nuke_shockwave");
+
+        // 3. 중심부 초열 플라즈마 거대 화구 코어 16개 (반경 60~110px로 부풀어오름, 약 3초간 눈부시게 지속)
+        for (let i = 0; i < 16; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = Math.random() * 55;
+            const px = x + Math.cos(angle) * dist;
+            const py = y + Math.sin(angle) * dist;
+            const size = 38 + Math.random() * 38;
+            const colors = ["#ffffff", "#ffedd5", "#fef08a", "#fbbf24"];
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            this.spawn(px, py, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2 - 1.2, size, color, 0.007, "nuke_fireball");
+        }
+
+        // 4. 사방으로 비산하는 묵직한 화염 파편 110개
+        for (let i = 0; i < 110; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 3.0 + Math.random() * 14.0;
+            const size = 7.0 + Math.random() * 10.0;
+            const colors = ["#ffffff", "#ef4444", "#f97316", "#facc15", "#ea580c", "#7c2d12"];
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            this.spawn(x, y, Math.cos(angle) * speed, Math.sin(angle) * speed, size, color, 0.015, "spark");
+        }
+
+        // 5. 1차 버섯구름 짙은 연기 기둥 50개
+        this.spawnNukeSmokeWave(x, y, 50, radius * 0.4);
+    }
+
+    /**
+     * 짙은 버섯구름 팽창 연기 파티클 생성 (수명 6~8초 지속, 거대한 팽창)
+     */
+    spawnNukeSmokeWave(centerX, centerY, count = 16, spread = 80) {
+        const smokeColors = [
+            "rgba(15, 23, 42, 0.94)",   // 짙은 흑회색
+            "rgba(30, 41, 59, 0.90)",   // 슬레이트 잿빛
+            "rgba(51, 65, 85, 0.86)",   // 먹구름
+            "rgba(67, 20, 7, 0.88)",    // 불타는 적갈색 연기
+            "rgba(124, 45, 18, 0.84)"   // 그을린 주황빛 연기
+        ];
+
+        for (let i = 0; i < count; i++) {
+            const offsetDist = Math.random() * spread;
+            const offsetAngle = Math.random() * Math.PI * 2;
+            const px = centerX + Math.cos(offsetAngle) * offsetDist;
+            const py = centerY + Math.sin(offsetAngle) * offsetDist;
+
+            // 서서히 솟구치며 사방으로 피어오르는 속도
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 0.5 + Math.random() * 3.2;
+            const vx = Math.cos(angle) * speed;
+            const vy = Math.sin(angle) * speed - (1.2 + Math.random() * 2.4); // 상공으로 치솟음
+
+            const baseSize = 26 + Math.random() * 28; // 부풀어 오르면 직경 120~250px의 묵직한 연기
+            const decay = 0.0035 + Math.random() * 0.003; // 6~8초 동안 전장을 덮는 초장기 수명
+            const color = smokeColors[Math.floor(Math.random() * smokeColors.length)];
+
+            this.spawn(px, py, vx, vy, baseSize, color, decay, "nuke_smoke");
+        }
+    }
+
+    /**
+     * 핵폭발 시 상공으로 수직 맹렬히 치솟는 거대한 불기둥 (Rising Fire Pillar)
+     */
+    spawnFirePillar(centerX, centerY, count = 95, spreadX = 160) {
+        const pillarColors = ["#ffffff", "#ffedd5", "#fef08a", "#facc15", "#f97316", "#ef4444", "#dc2626"];
+
+        for (let i = 0; i < count; i++) {
+            const px = centerX + (Math.random() - 0.5) * spreadX;
+            const py = centerY + (Math.random() - 0.5) * 45;
+
+            // 상공(위쪽)으로 맹렬하게 솟구치는 거대한 화염 폭풍
+            const vx = (Math.random() - 0.5) * 5.5;
+            const vy = -(7.0 + Math.random() * 18.0); // 맹렬한 수직 상승력
+            const size = 20.0 + Math.random() * 24.0; // 묵직한 거대 화염 덩어리
+            const decay = 0.012 + Math.random() * 0.010; // 잔상 지속시간 증가
+            const color = pillarColors[Math.floor(Math.random() * pillarColors.length)];
+
+            this.spawn(px, py, vx, vy, size, color, decay, "spark");
         }
     }
 

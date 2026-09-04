@@ -26,6 +26,15 @@ export class ScenarioDirector {
         this.bannerTimer = 0;
     }
 
+    clear() {
+        this.currentScenario = null;
+        this.elapsedTime = 0;
+        this.isPlaying = false;
+        this.firedEvents.clear();
+        this.activeBanner = null;
+        this.bannerTimer = 0;
+    }
+
     loadScenario(scenarioId) {
         const sc = SCENARIOS[scenarioId];
         if (!sc) return;
@@ -183,7 +192,7 @@ export class ScenarioDirector {
     }
 
     getNextEventInfo() {
-        if (!this.currentScenario) return "시나리오 미선택";
+        if (!this.currentScenario) return "유닛을 배치하거나 프리셋(1~5)을 로드하세요";
         const events = this.currentScenario.events || [];
         for (let i = 0; i < events.length; i++) {
             if (!this.firedEvents.has(i) && events[i].text) {
