@@ -1,30 +1,30 @@
-# ⚔️ WarBox (워박스)
+# WarBox (워박스)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Vanilla JS](https://img.shields.io/badge/Vanilla-JavaScript-F7DF1E?logo=javascript&logoColor=black)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
-[![HTML5 Canvas](https://img.shields.io/badge/HTML5-Canvas-E34F26?logo=html5&logoColor=white)](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API)
-[![60 FPS](https://img.shields.io/badge/Performance-60_FPS-00c853.svg)](#-핵심-엔진-최적화-기술)
+[![Vanilla JS](https://img.shields.io/badge/Vanilla-JavaScript-F7DF1E)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
+[![HTML5 Canvas](https://img.shields.io/badge/HTML5-Canvas-E34F26)](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API)
+[![60 FPS](https://img.shields.io/badge/Performance-60_FPS-00c853.svg)](#1-초고성능-바닐라-js-엔진-zero-gc--spatial-hashing)
 
 > **Zero-Dependency, 60 FPS Mass Battle Sandbox Simulator**  
 > 외부 프레임워크 없이 순수 HTML5 Canvas와 Vanilla JS로 구현된 초고성능 대규모 군단 배틀 샌드박스 시뮬레이터입니다.
 
 ---
 
-## 🌟 주요 특징 (Key Features)
+## 주요 특징 (Key Features)
 
-### 1. ⚡ 초고성능 바닐라 JS 엔진 (Zero-GC & Spatial Hashing)
+### 1. 초고성능 바닐라 JS 엔진 (Zero-GC & Spatial Hashing)
 - **5,000 ~ 10,000+ 유닛 동시 전투**: 브라우저 Canvas 2D 환경에서 프레임 드랍 없이 60 FPS 사수.
 - **$O(N)$ Spatial Hash Grid**: $O(N^2)$ 브루트포스 거리 연산 대신 격자 분할을 통해 충돌/타겟 탐색 연산 부하 98% 절감.
 - **Zero-GC 오브젝트 풀링**: 탄환, 산탄, 로켓, 파티클 등을 사전 생성된 배열 풀에서 재사용하여 가비지 컬렉션(GC) 렉 제로.
 - **배경 오프스크린 스탬프(Stamp Buffer)**: 핏자국, 파편, 폭발 그을음을 배경 캔버스에 영구 누적하여 렌더링 비용 최소화.
 
-### 2. 🎥 시네마틱 연출 & 뷰 모드 (Cinematic & View Modes)
+### 2. 시네마틱 연출 & 뷰 모드 (Cinematic & View Modes)
 - **원클릭 화면비 전환 (`R` 키)**: 가로 모드(16:9) ↔ 세로 모드(9:16) 캔버스 종횡비 즉시 변경.
 - **클린 뷰 모드 (`H` 키)**: 화면 내 모든 HUD와 UI를 숨겨 몰입감 높은 전장 관전 지원.
 - **다이내믹 연출 도구**: 0.2x 슬로우 모션(`Z`), 고속 배속(`X`), 카메라 스크린 셰이크(Screen Shake), 적 피격 섬광.
 
-### 3. 👥 2대 진영 및 다채로운 병종
-- **🔵 BLUE 진영 (현대 군대 & 하이테크)**:
+### 3. 2대 진영 및 다채로운 병종
+- **BLUE 진영 (현대 군대 & 하이테크)**:
   - `소총수 (Rifleman)`: 균형 잡힌 주력 원거리 보병
   - `샷건 특공대 (Shotgunner)`: 부채꼴 산탄 및 강력한 넉백 저지선 형성
   - `저격수 (Sniper)`: 초장거리 다중 관통탄 & 실시간 레이저 조준선
@@ -32,14 +32,14 @@
   - `미니건 터렛 (Minigun Turret)`: 거치형 중화기, 초당 20발 탄막 난사
   - `로켓 포병 (Rocket Artillery)`: 장거리 광역 대폭발 및 넉백
   - `메카 타이탄 (Mecha Titan)`: 보스급 결전 병기, 짓밟기 및 트윈 레이저 빔
-- **🔴 RED 진영 (감염체 & 괴수 군단)**:
+- **RED 진영 (감염체 & 괴수 군단)**:
   - `러너 좀비 (Runner Zombie)`: 빠른 속도로 떼를 지어 덮치는 표준 감염체
   - `탱커 브루트 (Tanker Brute)`: 높은 체력과 광역 지면 강타
   - `자폭체 (Exploder)`: 붉게 박동 후 대폭발 및 연쇄 폭발
   - `스피터 괴물 (Spitter)`: 포물선 산성액 투척 및 지면 독 장판 형성
   - `스웜 크롤러 (Swarm Crawler)`: 수천 마리가 파도처럼 쏟아지는 초소형 군집체
 
-### 4. 🛠️ 샌드박스 & 인게임 맵 에디터
+### 4. 샌드박스 & 인게임 맵 에디터
 - **스폰 브러시**: 마우스 드래그로 수백 마리의 병력을 붓칠하듯 배치.
 - **인게임 맵 에디터 (`E` 키)**: 콘크리트 벽, 바리케이드, 폭발 지뢰, 좀비 포탈 실시간 건설/삭제 및 JSON 내보내기.
 - **신의 권능 (God Mode)**: 전술 핵(Nuke), 블랙홀(Blackhole) 즉시 투하.
@@ -47,7 +47,7 @@
 
 ---
 
-## 🚀 빠른 시작 (Quick Start)
+## 빠른 시작 (Quick Start)
 
 별도의 빌드나 의존성 설치가 필요하지 않습니다.
 
@@ -69,7 +69,7 @@ npx serve .
 
 ---
 
-## 🎮 조작법 및 단축키 (Controls)
+## 조작법 및 단축키 (Controls)
 
 | 키 / 마우스 | 기능 |
 | :--- | :--- |
@@ -88,7 +88,7 @@ npx serve .
 
 ---
 
-## 📂 프로젝트 구조 (Architecture)
+## 프로젝트 구조 (Architecture)
 
 유지보수와 모딩의 편의를 위해 **단일 책임 원칙(SRP)**에 기반하여 모듈이 분리되어 있습니다:
 
@@ -119,7 +119,7 @@ C:/Coding/WarBox/
 
 ---
 
-## 🧩 나만의 유닛 추가하기 (Modding)
+## 나만의 유닛 추가하기 (Modding)
 
 `js/unitData.js` 파일의 `UNIT_TYPES` 객체에 새로운 유닛 스탯을 작성하면 게임 UI 덱과 스폰 시스템에 자동으로 등록됩니다:
 
@@ -131,7 +131,7 @@ cyborg_ninja: {
     desc: "초고속 이동과 카타나 연속 베기",
     faction: "blue",
     role: "melee",
-    icon: "🥷",
+    icon: "ninja",
     hp: 220,
     speed: 3.0,
     radius: 10,
@@ -147,6 +147,6 @@ cyborg_ninja: {
 
 ---
 
-## 📜 라이선스 (License)
+## 라이선스 (License)
 
 이 프로젝트는 [MIT 라이선스](LICENSE)에 따라 자유롭게 수정 및 배포할 수 있습니다.
