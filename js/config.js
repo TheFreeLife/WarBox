@@ -15,7 +15,8 @@ export const CONFIG = {
 
     // 성능 및 물리 최적화 설정
     PHYSICS: {
-        GRID_CELL_SIZE: 64,       // 공간 분할 격자 크기 (px)
+        GRID_CELL_SIZE: 48,       // 공간 분할 격자 크기 (48px 타일맵과 1:1 일치)
+        FLOW_CELL_SIZE: 48,       // 유동장 타일 그리드 크기 (px)
         TIME_STEP: 1 / 60,        // 고정 델타 타임 (초)
         MAX_DELTA: 0.1,           // OBS 프레임 드랍 시 델타 타임 클램핑
         DEFAULT_TIME_SCALE: 1.0,  // 기본 재생 배속

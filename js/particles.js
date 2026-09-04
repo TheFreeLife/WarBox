@@ -130,137 +130,202 @@ class Particle {
 }
 
 /**
- * 배경 오프스크린 스탬프 버퍼 (핏자국, 시체, 폭발 그을음 누적 캔버스)
+ * /**
+ * 무한 맵 지원 청크 기반 배경 스탬프 버퍼 (Chunked Background Stamp Buffer)
+ * 1024x1024 크기의 동적 오프스크린 캔버스 청크들로 무한 좌표계의 핏자국/탄피/분화구를 영구 누적합니다.
  */
 export class BackgroundStampBuffer {
-    constructor(width, height) {
-        this.width = width;
-        this.height = height;
-        this.canvas = document.createElement("canvas");
-        this.canvas.width = width;
-        this.canvas.height = height;
-        this.ctx = this.canvas.getContext("2d", { alpha: true });
-        this.clear();
+    constructor(chunkSize = 1024) {
+        this.chunkSize = chunkSize;
+        // 청크 맵: "cx,cy" -> { canvas, ctx, cx, cy }
+        this.chunks = new Map();
+    }
+
+    getChunkKey(cx, cy) {
+        return `${cx},${cy}`;
+    }
+
+    getChunk(cx, cy) {
+        const key = this.getChunkKey(cx, cy);
+        let chunk = this.chunks.get(key);
+        if (!chunk) {
+            const canvas = document.createElement("canvas");
+            canvas.width = this.chunkSize;
+            canvas.height = this.chunkSize;
+            const ctx = canvas.getContext("2d", { alpha: true });
+
+            chunk = { canvas, ctx, cx, cy };
+            this.chunks.set(key, chunk);
+        }
+        return chunk;
     }
 
     clear() {
-        this.ctx.clearRect(0, 0, this.width, this.height);
-        
-        // 미세한 모눈종이 전장 그리드 라인 1회 렌더링
-        this.ctx.strokeStyle = CONFIG.COLORS.GRID_LINES;
-        this.ctx.lineWidth = 1;
-        const step = 64;
-        this.ctx.beginPath();
-        for (let x = 0; x < this.width; x += step) {
-            this.ctx.moveTo(x, 0);
-            this.ctx.lineTo(x, this.height);
-        }
-        for (let y = 0; y < this.height; y += step) {
-            this.ctx.moveTo(0, y);
-            this.ctx.lineTo(this.width, y);
-        }
-        this.ctx.stroke();
+        this.chunks.clear();
     }
 
     /**
      * 지면에 핏자국 영구 도장 찍기
      */
     stampBlood(x, y, radius, color = "#881337") {
-        this.ctx.save();
-        this.ctx.fillStyle = color;
-        this.ctx.globalAlpha = 0.65;
-        this.ctx.beginPath();
-        // 무작위 불규칙 웅덩이 타원
-        this.ctx.arc(x, y, radius, 0, Math.PI * 2);
-        this.ctx.fill();
+        const cx = Math.floor(x / this.chunkSize);
+        const cy = Math.floor(y / this.chunkSize);
+        const chunk = this.getChunk(cx, cy);
+
+        const lx = x - cx * this.chunkSize;
+        const ly = y - cy * this.chunkSize;
+
+        const ctx = chunk.ctx;
+        ctx.save();
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.65;
+        ctx.beginPath();
+        ctx.arc(lx, ly, radius, 0, Math.PI * 2);
+        ctx.fill();
 
         // 튀어 나간 작은 핏방울 2~3개
         for (let i = 0; i < 2; i++) {
-            const rx = x + (Math.random() - 0.5) * radius * 2.2;
-            const ry = y + (Math.random() - 0.5) * radius * 2.2;
-            this.ctx.beginPath();
-            this.ctx.arc(rx, ry, radius * 0.35, 0, Math.PI * 2);
-            this.ctx.fill();
+            const rx = lx + (Math.random() - 0.5) * radius * 2.2;
+            const ry = ly + (Math.random() - 0.5) * radius * 2.2;
+            ctx.beginPath();
+            ctx.arc(rx, ry, radius * 0.35, 0, Math.PI * 2);
+            ctx.fill();
         }
-        this.ctx.restore();
+        ctx.restore();
     }
 
     /**
      * 바닥에 탄피 영구 도장
      */
     stampCasing(x, y) {
-        this.ctx.save();
-        this.ctx.fillStyle = "rgba(234, 179, 8, 0.4)";
-        this.ctx.fillRect(x - 1.5, y - 0.75, 3, 1.5);
-        this.ctx.restore();
+        const cx = Math.floor(x / this.chunkSize);
+        const cy = Math.floor(y / this.chunkSize);
+        const chunk = this.getChunk(cx, cy);
+
+        const lx = x - cx * this.chunkSize;
+        const ly = y - cy * this.chunkSize;
+
+        chunk.ctx.save();
+        chunk.ctx.fillStyle = "rgba(234, 179, 8, 0.4)";
+        chunk.ctx.fillRect(lx - 1.5, ly - 0.75, 3, 1.5);
+        chunk.ctx.restore();
     }
 
     /**
      * 폭발 그을음 분화구 (Crater) 영구 도장
      */
     stampCrater(x, y, radius) {
-        this.ctx.save();
-        this.ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
-        this.ctx.beginPath();
-        this.ctx.arc(x, y, radius * 0.8, 0, Math.PI * 2);
-        this.ctx.fill();
+        const minChunkX = Math.floor((x - radius) / this.chunkSize);
+        const maxChunkX = Math.floor((x + radius) / this.chunkSize);
+        const minChunkY = Math.floor((y - radius) / this.chunkSize);
+        const maxChunkY = Math.floor((y + radius) / this.chunkSize);
 
-        this.ctx.fillStyle = "rgba(15, 23, 42, 0.7)";
-        this.ctx.beginPath();
-        this.ctx.arc(x, y, radius * 0.45, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.restore();
+        for (let cy = minChunkY; cy <= maxChunkY; cy++) {
+            for (let cx = minChunkX; cx <= maxChunkX; cx++) {
+                const chunk = this.getChunk(cx, cy);
+                const lx = x - cx * this.chunkSize;
+                const ly = y - cy * this.chunkSize;
+
+                const ctx = chunk.ctx;
+                ctx.save();
+                ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
+                ctx.beginPath();
+                ctx.arc(lx, ly, radius * 0.8, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = "rgba(15, 23, 42, 0.7)";
+                ctx.beginPath();
+                ctx.arc(lx, ly, radius * 0.45, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
     }
 
     /**
      * 핵폭발 초대형 그을음 및 파괴 분화구 (Crater) 영구 도장
      */
     stampNukeCrater(x, y, radius = 280) {
-        this.ctx.save();
+        const minChunkX = Math.floor((x - radius * 1.3) / this.chunkSize);
+        const maxChunkX = Math.floor((x + radius * 1.3) / this.chunkSize);
+        const minChunkY = Math.floor((y - radius * 1.3) / this.chunkSize);
+        const maxChunkY = Math.floor((y + radius * 1.3) / this.chunkSize);
 
-        // 1. 거대한 방사능 초열 그을음 (외곽 반투명 검은 재)
-        this.ctx.fillStyle = "rgba(10, 15, 26, 0.75)";
-        this.ctx.beginPath();
-        this.ctx.arc(x, y, radius * 1.25, 0, Math.PI * 2);
-        this.ctx.fill();
+        for (let cy = minChunkY; cy <= maxChunkY; cy++) {
+            for (let cx = minChunkX; cx <= maxChunkX; cx++) {
+                const chunk = this.getChunk(cx, cy);
+                const lx = x - cx * this.chunkSize;
+                const ly = y - cy * this.chunkSize;
 
-        // 2. 중간 열폭풍 연소 구역
-        this.ctx.fillStyle = "rgba(3, 7, 18, 0.9)";
-        this.ctx.beginPath();
-        this.ctx.arc(x, y, radius * 0.8, 0, Math.PI * 2);
-        this.ctx.fill();
+                const ctx = chunk.ctx;
+                ctx.save();
 
-        // 3. 중심부 칠흑의 파괴 분화구
-        this.ctx.fillStyle = "rgba(0, 0, 0, 0.98)";
-        this.ctx.beginPath();
-        this.ctx.arc(x, y, radius * 0.45, 0, Math.PI * 2);
-        this.ctx.fill();
+                // 1. 방사능 초열 그을음
+                ctx.fillStyle = "rgba(10, 15, 26, 0.75)";
+                ctx.beginPath();
+                ctx.arc(lx, ly, radius * 1.25, 0, Math.PI * 2);
+                ctx.fill();
 
-        // 4. 사방으로 뻗어나간 지면 파열 균열선 (Cracks)
-        this.ctx.strokeStyle = "rgba(0, 0, 0, 0.85)";
-        this.ctx.lineWidth = 2.5;
-        for (let i = 0; i < 14; i++) {
-            const angle = (i / 14) * Math.PI * 2 + (Math.random() - 0.5) * 0.35;
-            const dist = radius * (0.6 + Math.random() * 0.65);
-            this.ctx.beginPath();
-            this.ctx.moveTo(x, y);
-            const midX = x + Math.cos(angle) * (dist * 0.5) + (Math.random() - 0.5) * 20;
-            const midY = y + Math.sin(angle) * (dist * 0.5) + (Math.random() - 0.5) * 20;
-            const endX = x + Math.cos(angle) * dist;
-            const endY = y + Math.sin(angle) * dist;
-            this.ctx.lineTo(midX, midY);
-            this.ctx.lineTo(endX, endY);
-            this.ctx.stroke();
+                // 2. 중간 열폭풍 연소 구역
+                ctx.fillStyle = "rgba(3, 7, 18, 0.9)";
+                ctx.beginPath();
+                ctx.arc(lx, ly, radius * 0.8, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 3. 중심부 칠흑의 파괴 분화구
+                ctx.fillStyle = "rgba(0, 0, 0, 0.98)";
+                ctx.beginPath();
+                ctx.arc(lx, ly, radius * 0.45, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 4. 지면 파열 균열선
+                ctx.strokeStyle = "rgba(0, 0, 0, 0.85)";
+                ctx.lineWidth = 2.5;
+                for (let i = 0; i < 14; i++) {
+                    const angle = (i / 14) * Math.PI * 2 + (Math.random() - 0.5) * 0.35;
+                    const dist = radius * (0.6 + Math.random() * 0.65);
+                    ctx.beginPath();
+                    ctx.moveTo(lx, ly);
+                    const midX = lx + Math.cos(angle) * (dist * 0.5) + (Math.random() - 0.5) * 20;
+                    const midY = ly + Math.sin(angle) * (dist * 0.5) + (Math.random() - 0.5) * 20;
+                    const endX = lx + Math.cos(angle) * dist;
+                    const endY = ly + Math.sin(angle) * dist;
+                    ctx.lineTo(midX, midY);
+                    ctx.lineTo(endX, endY);
+                    ctx.stroke();
+                }
+
+                ctx.restore();
+            }
         }
-
-        this.ctx.restore();
     }
 
     /**
-     * 메인 캔버스에 누적된 배경 1회 블릿
+     * 메인 캔버스에 카메라 뷰포트 내의 활성 청크 블릿
      */
-    render(mainCtx) {
-        mainCtx.drawImage(this.canvas, 0, 0);
+    render(mainCtx, camera = null) {
+        if (camera) {
+            const halfW = (camera.canvas.width / 2) / camera.zoom;
+            const halfH = (camera.canvas.height / 2) / camera.zoom;
+            const minChunkX = Math.floor((camera.x - halfW) / this.chunkSize);
+            const maxChunkX = Math.floor((camera.x + halfW) / this.chunkSize);
+            const minChunkY = Math.floor((camera.y - halfH) / this.chunkSize);
+            const maxChunkY = Math.floor((camera.y + halfH) / this.chunkSize);
+
+            for (let cy = minChunkY; cy <= maxChunkY; cy++) {
+                for (let cx = minChunkX; cx <= maxChunkX; cx++) {
+                    const key = this.getChunkKey(cx, cy);
+                    const chunk = this.chunks.get(key);
+                    if (chunk) {
+                        mainCtx.drawImage(chunk.canvas, cx * this.chunkSize, cy * this.chunkSize);
+                    }
+                }
+            }
+        } else {
+            for (const chunk of this.chunks.values()) {
+                mainCtx.drawImage(chunk.canvas, chunk.cx * this.chunkSize, chunk.cy * this.chunkSize);
+            }
+        }
     }
 }
 

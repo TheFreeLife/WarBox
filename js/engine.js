@@ -14,6 +14,7 @@ import { Camera } from './camera.js';
 import { ScenarioDirector } from './scenarioDirector.js';
 import { SimulatorTweaker } from './tweaker.js';
 import { MapEditor } from './mapEditor.js';
+import { FlowFieldManager } from './flowField.js';
 
 export class BattleEngine {
     constructor(canvas, viewportContainer) {
@@ -27,6 +28,17 @@ export class BattleEngine {
         this.particlePool = new ParticlePool(CONFIG.POOLS.MAX_PARTICLES);
         this.projectilePool = new ProjectilePool(CONFIG.POOLS.MAX_PROJECTILES);
         this.mapManager = new MapManager(CONFIG.WORLD.WIDTH, CONFIG.WORLD.HEIGHT);
+        this.flowFieldManager = new FlowFieldManager(
+            CONFIG.WORLD.WIDTH,
+            CONFIG.WORLD.HEIGHT,
+            CONFIG.PHYSICS.FLOW_CELL_SIZE || 48
+        );
+        // 맵 장애물 변경 시 유동장 비용 필드 자동 재구축 연동
+        this.mapManager.onChange = (mapMgr) => {
+            this.flowFieldManager.rebuildCostField(mapMgr);
+        };
+        this.flowFieldManager.rebuildCostField(this.mapManager);
+
         this.unitManager = new UnitManager();
 
         this.scenarioDirector = new ScenarioDirector(
@@ -109,13 +121,16 @@ export class BattleEngine {
         // 맵 장애물 업데이트 (스폰 포탈)
         this.mapManager.update(dt, this.unitManager, this.particlePool, this.stampBuffer);
 
-        // 공간 분할 그리드 클리어 및 유닛 재등록 (O(N) 초고속)
+        // 유동장 업데이트 (진영별 다중 목적지 BFS 갱신 - 카메라 및 유닛 중심 추적)
+        this.flowFieldManager.update(dt, this.unitManager.units, this.camera);
+
+        // 공간 분할 그리드 클리어 및 유닛 재등록 (O(N) 초고속 무한 해시)
         this.spatialGrid.clear();
         for (let i = 0; i < this.unitManager.units.length; i++) {
             this.spatialGrid.insert(this.unitManager.units[i]);
         }
 
-        // 유닛 AI 및 물리 업데이트
+        // 유닛 AI 및 물리 업데이트 (유동장 하이브리드 조향 적용)
         this.unitManager.update(
             dt,
             this.spatialGrid,
@@ -123,7 +138,8 @@ export class BattleEngine {
             this.particlePool,
             this.stampBuffer,
             this.mapManager,
-            this.tweaker.infectionMode
+            this.tweaker.infectionMode,
+            this.flowFieldManager
         );
 
         // 투사체 충돌 및 비행 업데이트
@@ -169,11 +185,19 @@ export class BattleEngine {
         // 2. 카메라 변환 적용 (줌, 패닝, 스크린 셰이크)
         this.camera.apply(ctx);
 
-        // 3. 배경 오프스크린 스탬프 버퍼 1회 렌더링 (영구 핏자국, 분화구, 탄피)
-        this.stampBuffer.render(ctx);
+        // 2.5. 무한 전장 모눈종이 기본 그리드 렌더링
+        this.renderInfiniteGrid(ctx);
 
-        // 4. 맵 장애물 렌더링 (벽, 바리케이드, 지뢰, 포탈)
-        this.mapManager.render(ctx);
+        // 3. 배경 오프스크린 스탬프 버퍼 렌더링 (영구 핏자국, 분화구, 탄피 청크)
+        this.stampBuffer.render(ctx, this.camera);
+
+        // 4. 무한 맵 장애물 렌더링 (뷰포트 컬링)
+        this.mapManager.render(ctx, this.camera);
+
+        // 4.5. 유동장 디버그 오버레이 렌더링
+        if (this.flowFieldManager.debugRender) {
+            this.flowFieldManager.renderDebug(ctx);
+        }
 
         // 5. 맵 에디터 미리보기 렌더링
         this.mapEditor.renderPreview(ctx);
@@ -219,11 +243,49 @@ export class BattleEngine {
         }
     }
 
-    renderNightVision(ctx) {
-        // 전장을 어둡게 덮고 인간 유닛들 주변에만 손전등 빛을 비추는 호러 아포칼립스 연출
+    renderInfiniteGrid(ctx) {
+        const cam = this.camera;
+        const halfW = (cam.canvas.width / 2) / cam.zoom;
+        const halfH = (cam.canvas.height / 2) / cam.zoom;
+        const step = this.mapManager ? this.mapManager.tileSize : 48;
+
+        const minX = Math.floor((cam.x - halfW) / step) * step;
+        const maxX = Math.ceil((cam.x + halfW) / step) * step;
+        const minY = Math.floor((cam.y - halfH) / step) * step;
+        const maxY = Math.ceil((cam.y + halfH) / step) * step;
+
         ctx.save();
+        // 맵 에디터 활성화 시 격자선 밝기 및 시인성 강조
+        if (this.mapEditor && this.mapEditor.active) {
+            ctx.strokeStyle = "rgba(56, 189, 248, 0.18)";
+            ctx.lineWidth = 1;
+        } else {
+            ctx.strokeStyle = CONFIG.COLORS.GRID_LINES || "rgba(255, 255, 255, 0.05)";
+            ctx.lineWidth = 1;
+        }
+        ctx.beginPath();
+
+        for (let x = minX; x <= maxX; x += step) {
+            ctx.moveTo(x, minY);
+            ctx.lineTo(x, maxY);
+        }
+        for (let y = minY; y <= maxY; y += step) {
+            ctx.moveTo(minX, y);
+            ctx.lineTo(maxX, y);
+        }
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    renderNightVision(ctx) {
+        // 전장을 어둡게 덮고 인간 유닛들 주변에만 손전등 빛을 비추는 호러 아포칼립스 연출 (무한 뷰포트 대응)
+        ctx.save();
+        const cam = this.camera;
+        const halfW = (cam.canvas.width / 2) / cam.zoom;
+        const halfH = (cam.canvas.height / 2) / cam.zoom;
+
         ctx.fillStyle = "rgba(5, 10, 20, 0.88)";
-        ctx.fillRect(0, 0, CONFIG.WORLD.WIDTH, CONFIG.WORLD.HEIGHT);
+        ctx.fillRect(cam.x - halfW - 50, cam.y - halfH - 50, halfW * 2 + 100, halfH * 2 + 100);
 
         // Blue 군인들 주변 시야 밝히기 (손전등 효과)
         ctx.globalCompositeOperation = "destination-out";
@@ -279,6 +341,9 @@ export class BattleEngine {
         this.stampBuffer.clear();
         this.particlePool.currentIndex = 0;
         this.mapManager.clear();
+        this.flowFieldManager.rebuildCostField(this.mapManager);
+        this.flowFieldManager.redField.reset();
+        this.flowFieldManager.blueField.reset();
         this.scenarioDirector.clear();
         this.tweaker.clear();
     }

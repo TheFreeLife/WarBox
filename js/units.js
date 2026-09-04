@@ -68,7 +68,7 @@ export class Unit {
         }
     }
 
-    update(dt, spatialGrid, projectilePool, particlePool, stampBuffer, mapManager, infectionMode, unitManager) {
+    update(dt, spatialGrid, projectilePool, particlePool, stampBuffer, mapManager, infectionMode, unitManager, flowFieldManager) {
         if (!this.isAlive) return;
 
         // 피격 백색 섬광 타이머 감소
@@ -97,9 +97,18 @@ export class Unit {
             this.target = spatialGrid.findNearestEnemy(this, this.type.sightRange || 450);
         }
 
-        // 2. 이동 및 조향 (Steering)
+        // 2. 이동 및 조향 (하이브리드: 유동장 우회 기동 + 근접 타겟팅)
         let moveX = 0;
         let moveY = 0;
+
+        // 진영별 유동장(Flow Field) 방향 벡터 샘플링
+        let flowX = 0;
+        let flowY = 0;
+        if (flowFieldManager) {
+            const flow = flowFieldManager.getFlowVector(this.x, this.y, this.faction);
+            flowX = flow.x;
+            flowY = flow.y;
+        }
 
         if (this.target && this.target.isAlive) {
             const dx = this.target.x - this.x;
@@ -110,19 +119,40 @@ export class Unit {
 
             const attackRange = this.type.attackRange || 20;
 
-            // 사거리 밖이면 적을 향해 전진
-            if (dist > attackRange * 0.85) {
-                moveX = (dx / dist);
-                moveY = (dy / dist);
-            } else if (dist < attackRange * 0.4 && this.type.role === "ranged") {
-                // 원거리 딜러 카이팅 (너무 가까우면 뒤로 후퇴)
-                moveX = -(dx / dist) * 0.6;
-                moveY = -(dy / dist) * 0.6;
-            }
-
             // 사거리 안이면 공격 실행
             if (dist <= attackRange && this.attackCooldown <= 0) {
                 this.performAttack(this.target, projectilePool, particlePool, stampBuffer, unitManager);
+            }
+
+            if (dist < attackRange * 0.4 && this.type.role === "ranged") {
+                // 원거리 딜러 카이팅 (너무 가까우면 뒤로 후퇴)
+                moveX = -(dx / dist) * 0.6;
+                moveY = -(dy / dist) * 0.6;
+            } else if (dist > attackRange * 0.85) {
+                // 사거리 밖: 타겟과의 거리에 따라 플로우필드(벽 우회)와 직접 추적 벡터 지능형 혼합
+                if (flowX !== 0 || flowY !== 0) {
+                    // 사거리의 2.5배보다 멀리 있거나 벽 너머에 있을 때 플로우필드 비중을 높여 미로/벽 우회 보장
+                    const directWeight = Math.min(1.0, (attackRange * 2.5) / Math.max(1, dist));
+                    const flowWeight = 1.0 - directWeight * 0.7; // 최소 30% 플로우 유지로 코너 우회 보장
+
+                    moveX = (dx / dist) * directWeight + flowX * flowWeight;
+                    moveY = (dy / dist) * directWeight + flowY * flowWeight;
+                    const mLen = Math.hypot(moveX, moveY);
+                    if (mLen > 0.001) {
+                        moveX /= mLen;
+                        moveY /= mLen;
+                    }
+                } else {
+                    moveX = dx / dist;
+                    moveY = dy / dist;
+                }
+            }
+        } else {
+            // 시야 내에 타겟 적이 없을 때: 플로우필드를 따라 전선을 향해 진격!
+            if (flowX !== 0 || flowY !== 0) {
+                moveX = flowX;
+                moveY = flowY;
+                this.angle = Math.atan2(flowY, flowX);
             }
         }
 
@@ -155,9 +185,7 @@ export class Unit {
         this.x += this.vx * dt * 60;
         this.y += this.vy * dt * 60;
 
-        // 월드 경계 제한
-        this.x = Math.max(this.radius, Math.min(CONFIG.WORLD.WIDTH - this.radius, this.x));
-        this.y = Math.max(this.radius, Math.min(CONFIG.WORLD.HEIGHT - this.radius, this.y));
+        // 무한 맵: 월드 경계 제한 해제 (동서남북 무한 이동 지원)
 
         // 맵 장애물(벽) 충돌 해결
         if (mapManager) {
@@ -278,25 +306,27 @@ export class Unit {
         const color = this.type.color || (this.faction === "blue" ? CONFIG.COLORS.BLUE_PRIMARY : CONFIG.COLORS.RED_PRIMARY);
 
         if (this.type.shape === "mech_titan") {
-            // [메카 타이탄] 각진 거대 보행 병기 + 아크 리액터
+            // [메카 타이탄] 2x2칸을 꽉 채우는 각진 거대 보행 병기 + 아크 리액터
             ctx.fillStyle = "#1e293b";
             ctx.fillRect(-this.radius, -this.radius, this.radius * 2, this.radius * 2);
             ctx.strokeStyle = "#38bdf8";
-            ctx.lineWidth = 3;
+            ctx.lineWidth = 4;
             ctx.strokeRect(-this.radius, -this.radius, this.radius * 2, this.radius * 2);
 
             // 트윈 캐논 포신 2문
             ctx.fillStyle = "#0284c7";
-            ctx.fillRect(8, -14, 20, 6);
-            ctx.fillRect(8, 8, 20, 6);
+            const canonW = this.radius * 0.9;
+            const canonH = this.radius * 0.24;
+            ctx.fillRect(this.radius * 0.15, -this.radius * 0.65, canonW, canonH);
+            ctx.fillRect(this.radius * 0.15, this.radius * 0.41, canonW, canonH);
 
             // 중심 청백색 아크 리액터 코어
             ctx.fillStyle = "#38bdf8";
             ctx.beginPath();
-            ctx.arc(0, 0, 8, 0, Math.PI * 2);
+            ctx.arc(0, 0, this.radius * 0.32, 0, Math.PI * 2);
             ctx.fill();
         } else if (this.type.shape === "brute_monster") {
-            // [탱커 브루트] 거대한 근육질 역삼각형 체형 + 등 뒤 척추 가시
+            // [탱커 브루트] 1칸 통로를 꽉 막는 거대한 근육질 체형
             ctx.fillStyle = color;
             ctx.beginPath();
             ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
@@ -304,9 +334,10 @@ export class Unit {
 
             // 주먹 2개
             ctx.fillStyle = "#7f1d1d";
+            const fistR = this.radius * 0.28;
             ctx.beginPath();
-            ctx.arc(this.radius * 0.8, -this.radius * 0.8, 6, 0, Math.PI * 2);
-            ctx.arc(this.radius * 0.8, this.radius * 0.8, 6, 0, Math.PI * 2);
+            ctx.arc(this.radius * 0.75, -this.radius * 0.65, fistR, 0, Math.PI * 2);
+            ctx.arc(this.radius * 0.75, this.radius * 0.65, fistR, 0, Math.PI * 2);
             ctx.fill();
         } else if (this.type.shape === "bloater") {
             // [자폭체] 붉게 두근거리는 박동(Pulsing) 배
@@ -432,14 +463,14 @@ export class UnitManager {
         }
     }
 
-    update(dt, spatialGrid, projectilePool, particlePool, stampBuffer, mapManager, infectionMode) {
+    update(dt, spatialGrid, projectilePool, particlePool, stampBuffer, mapManager, infectionMode, flowFieldManager) {
         let bCount = 0;
         let rCount = 0;
 
         for (let i = 0; i < this.units.length; i++) {
             const u = this.units[i];
             if (u.isAlive) {
-                u.update(dt, spatialGrid, projectilePool, particlePool, stampBuffer, mapManager, infectionMode, this);
+                u.update(dt, spatialGrid, projectilePool, particlePool, stampBuffer, mapManager, infectionMode, this, flowFieldManager);
                 if (u.faction === "blue") bCount++;
                 else rCount++;
             } else {

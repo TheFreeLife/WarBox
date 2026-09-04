@@ -44,6 +44,7 @@
                         녹화뷰(H)</button>
                     <button id="btn-clear" class="btn-tactical" style="color:#ef4444;" title="전체 삭제 (C)">🗑️
                         클리어</button>
+                    <button id="btn-shortcuts-top" class="btn-tactical" title="단축키 안내 (?)">⌨️ 단축키 (?)</button>
                 </div>
             </div>
 
@@ -66,17 +67,6 @@
 
         <!-- 인게임 알림 토스트 배너 -->
         <div id="game-toast" class="game-toast"></div>
-
-        <!-- 3. 하단 단축키 가이드 힌트 -->
-        <div class="shortcut-hint">
-            <span><span class="kbd">H</span> 녹화 클린뷰</span>
-            <span><span class="kbd">Space</span> 정지</span>
-            <span><span class="kbd">Z</span> 0.2x 슬로우</span>
-            <span><span class="kbd">X</span> 배속</span>
-            <span><span class="kbd">R</span> 쇼츠 비율</span>
-            <span><span class="kbd">1~5</span> 프리셋 로드</span>
-            <span><span class="kbd">휠/우클릭</span> 줌 & 패닝</span>
-        </div>
 
         <!-- 4. 하단 샌드박스 도크 바 -->
         <footer id="bottom-bar">
@@ -103,6 +93,7 @@
 
                 <!-- 도구 패널 토글 버튼들 -->
                 <div style="display:flex; gap:8px;">
+                    <button id="btn-toggle-shortcuts" class="btn-tactical" title="단축키 안내 (?)">⌨️ 단축키 (?)</button>
                     <button id="btn-toggle-editor" class="btn-tactical">🧱 맵 에디터 (E)</button>
                     <button id="btn-toggle-tweaker" class="btn-tactical">🎛️ 변수 조절 (T)</button>
                 </div>
@@ -132,9 +123,18 @@
                     (삭제)</button>
             </div>
             <div style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">
-                <button id="btn-export-map" class="btn-tactical" style="justify-content:center;">💾 맵 JSON 내보내기</button>
-                <button id="btn-clear-map" class="btn-tactical" style="justify-content:center; color:#ef4444;">🗑️ 모든
-                    장애물 제거</button>
+                <div style="font-size:11px; color:#94a3b8; font-weight:bold; margin-top:4px;">기본 타일맵 프리셋:</div>
+                <div style="display:flex; gap:6px;">
+                    <button id="btn-preset-choke" class="btn-tactical" style="flex:1; justify-content:center; font-size:11px;">🏰 초크포인트 요새</button>
+                    <button id="btn-preset-crossroad" class="btn-tactical" style="flex:1; justify-content:center; font-size:11px;">⚔️ 십자로 벙커</button>
+                </div>
+                <button id="btn-toggle-flow-debug" class="btn-tactical" style="justify-content:center;">🌊 유동장 벡터 보기 (F)</button>
+                <div style="display:flex; gap:6px;">
+                    <button id="btn-export-map" class="btn-tactical" style="flex:1; justify-content:center;">💾 맵 저장</button>
+                    <button id="btn-import-map" class="btn-tactical" style="flex:1; justify-content:center;">📂 맵 열기</button>
+                    <input type="file" id="input-import-map" accept=".json" style="display:none;">
+                </div>
+                <button id="btn-clear-map" class="btn-tactical" style="justify-content:center; color:#ef4444;">🗑️ 모든 타일 제거</button>
             </div>
         </aside>
 
@@ -173,6 +173,44 @@
                 </div>
             </div>
         </aside>
+
+        <!-- 7. 단축키 안내 팝업 모달 (토글형) -->
+        <div id="shortcuts-modal" class="modal-overlay hidden">
+            <div class="shortcuts-card">
+                <div class="panel-title" style="margin-bottom:8px;">
+                    <span style="font-size:15px; font-weight:700;">⌨️ 전역 단축키 안내</span>
+                    <button id="close-shortcuts-btn" style="background:none; border:none; color:#94a3b8; font-size:18px; cursor:pointer; padding:2px 6px;">✕</button>
+                </div>
+                <div class="shortcuts-grid">
+                    <div class="shortcut-col">
+                        <div class="shortcut-category">🎮 시뮬레이션 제어</div>
+                        <div class="shortcut-item"><span class="kbd">Space</span> <span>일시정지 / 재생</span></div>
+                        <div class="shortcut-item"><span class="kbd">Z</span> <span>0.2x 슬로우 모션</span></div>
+                        <div class="shortcut-item"><span class="kbd">X</span> <span>2.5x 고속 배속</span></div>
+                        <div class="shortcut-item"><span class="kbd">C</span> <span>전장 전체 초기화</span></div>
+                        <div class="shortcut-item"><span class="kbd">1~5</span> <span>시나리오 프리셋</span></div>
+                    </div>
+                    <div class="shortcut-col">
+                        <div class="shortcut-category">🎥 카메라 & 뷰</div>
+                        <div class="shortcut-item"><span class="kbd">H</span> <span>녹화 클린뷰 (UI 숨김)</span></div>
+                        <div class="shortcut-item"><span class="kbd">R</span> <span>16:9 ↔ 9:16 비율 전환</span></div>
+                        <div class="shortcut-item"><span class="kbd">휠</span> <span>줌 인 / 줌 아웃</span></div>
+                        <div class="shortcut-item"><span class="kbd">우클릭</span> <span>카메라 패닝 (이동)</span></div>
+                    </div>
+                    <div class="shortcut-col">
+                        <div class="shortcut-category">🛠️ 도구 & 유동장</div>
+                        <div class="shortcut-item"><span class="kbd">E</span> <span>인게임 맵 에디터</span></div>
+                        <div class="shortcut-item"><span class="kbd">T</span> <span>변수 조절기 패널</span></div>
+                        <div class="shortcut-item"><span class="kbd">F</span> <span>유동장 벡터 시각화</span></div>
+                        <div class="shortcut-item"><span class="kbd">Tab</span> <span>RED / BLUE 유동장 전환</span></div>
+                        <div class="shortcut-item"><span class="kbd">?</span> <span>단축키 창 토글</span></div>
+                    </div>
+                </div>
+                <div style="margin-top:14px; font-size:11px; color:#64748b; text-align:center; border-top:1px solid var(--panel-border); padding-top:10px;">
+                    <span class="kbd" style="font-size:9px;">ESC</span> 키나 배경 클릭으로 닫을 수 있습니다.
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- 메인 진입점 모듈 스크립트 -->

@@ -135,7 +135,8 @@ window.addEventListener("DOMContentLoaded", () => {
     // 첫 클릭 시 오디오 컨텍스트 활성화
     window.addEventListener("click", () => soundFX.init(), { once: true });
 
-    canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+    // 전체 화면(UI 메뉴, 버튼, 캔버스 등)에서 우클릭 컨텍스트 메뉴 완전 차단
+    window.addEventListener("contextmenu", (e) => e.preventDefault());
 
     canvas.addEventListener("mousedown", (e) => {
         soundFX.init();
@@ -304,6 +305,38 @@ window.addEventListener("DOMContentLoaded", () => {
         btnToggleTweaker.classList.remove("active");
     });
 
+    // 7.5. 단축키 안내 팝업 모달 토글
+    const shortcutsModal = document.getElementById("shortcuts-modal");
+    const btnShortcutsTop = document.getElementById("btn-shortcuts-top");
+    const btnToggleShortcuts = document.getElementById("btn-toggle-shortcuts");
+    const closeShortcutsBtn = document.getElementById("close-shortcuts-btn");
+
+    function toggleShortcutsModal(forceOpen) {
+        if (!shortcutsModal) return;
+        const isCurrentlyOpen = !shortcutsModal.classList.contains("hidden");
+        const shouldOpen = forceOpen !== undefined ? forceOpen : !isCurrentlyOpen;
+        shortcutsModal.classList.toggle("hidden", !shouldOpen);
+        if (btnShortcutsTop) btnShortcutsTop.classList.toggle("active", shouldOpen);
+        if (btnToggleShortcuts) btnToggleShortcuts.classList.toggle("active", shouldOpen);
+    }
+
+    if (btnShortcutsTop) {
+        btnShortcutsTop.addEventListener("click", () => toggleShortcutsModal());
+    }
+    if (btnToggleShortcuts) {
+        btnToggleShortcuts.addEventListener("click", () => toggleShortcutsModal());
+    }
+    if (closeShortcutsBtn) {
+        closeShortcutsBtn.addEventListener("click", () => toggleShortcutsModal(false));
+    }
+    if (shortcutsModal) {
+        shortcutsModal.addEventListener("click", (e) => {
+            if (e.target === shortcutsModal) {
+                toggleShortcutsModal(false);
+            }
+        });
+    }
+
     // 맵 에디터 도구 선택
     document.querySelectorAll("[data-map-tool]").forEach(btn => {
         btn.addEventListener("click", () => {
@@ -313,12 +346,57 @@ window.addEventListener("DOMContentLoaded", () => {
         });
     });
 
+    const btnToggleFlow = document.getElementById("btn-toggle-flow-debug");
+    if (btnToggleFlow) {
+        btnToggleFlow.addEventListener("click", () => {
+            engine.flowFieldManager.debugRender = !engine.flowFieldManager.debugRender;
+            btnToggleFlow.classList.toggle("active", engine.flowFieldManager.debugRender);
+            const mode = engine.flowFieldManager.debugRender 
+                ? `ON (${engine.flowFieldManager.debugFaction.toUpperCase()} 진영, Tab으로 전환)` 
+                : "OFF";
+            showToast(`유동장(Flow Field) 시각화: ${mode}`);
+        });
+    }
+
+    const btnPresetChoke = document.getElementById("btn-preset-choke");
+    if (btnPresetChoke) {
+        btnPresetChoke.addEventListener("click", () => {
+            engine.mapManager.loadPreset("choke_outpost");
+            showToast("🏰 <strong>초크포인트 요새</strong> 타일맵 로드 완료");
+        });
+    }
+
+    const btnPresetCrossroad = document.getElementById("btn-preset-crossroad");
+    if (btnPresetCrossroad) {
+        btnPresetCrossroad.addEventListener("click", () => {
+            engine.mapManager.loadPreset("crossroad_bunker");
+            showToast("⚔️ <strong>십자로 벙커</strong> 타일맵 로드 완료");
+        });
+    }
+
+    const btnImportMap = document.getElementById("btn-import-map");
+    const inputImportMap = document.getElementById("input-import-map");
+    if (btnImportMap && inputImportMap) {
+        btnImportMap.addEventListener("click", () => {
+            inputImportMap.click();
+        });
+        inputImportMap.addEventListener("change", (e) => {
+            if (e.target.files && e.target.files[0]) {
+                engine.mapEditor.importMapFromFile(e.target.files[0]);
+                showToast("📂 타일맵 파일이 성공적으로 로드되었습니다.");
+                e.target.value = "";
+            }
+        });
+    }
+
     document.getElementById("btn-export-map").addEventListener("click", () => {
         engine.mapEditor.exportMapToFile();
+        showToast("💾 타일맵 JSON 파일이 저장되었습니다.");
     });
 
     document.getElementById("btn-clear-map").addEventListener("click", () => {
         engine.mapManager.clear();
+        showToast("🗑️ 모든 타일이 제거되었습니다.");
     });
 
     // 변수 조절기 설정 바인딩
@@ -371,10 +449,16 @@ window.addEventListener("DOMContentLoaded", () => {
         const key = e.key.toUpperCase();
 
         if (e.key === "Escape" || key === "ESCAPE") {
+            if (shortcutsModal && !shortcutsModal.classList.contains("hidden")) {
+                toggleShortcutsModal(false);
+                return;
+            }
             if (activeGodPower) {
                 activeGodPower = null;
                 hideToast();
             }
+        } else if (e.key === "?" || (e.key === "/" && !e.ctrlKey)) {
+            toggleShortcutsModal();
         } else if (key === "H") {
             engine.toggleCleanRecording();
         } else if (e.code === "Space") {
@@ -396,6 +480,16 @@ window.addEventListener("DOMContentLoaded", () => {
             btnToggleEditor.click();
         } else if (key === "T") {
             btnToggleTweaker.click();
+        } else if (key === "F") {
+            engine.flowFieldManager.debugRender = !engine.flowFieldManager.debugRender;
+            const mode = engine.flowFieldManager.debugRender 
+                ? `ON (${engine.flowFieldManager.debugFaction.toUpperCase()} 진영, Tab으로 전환)` 
+                : "OFF";
+            showToast(`유동장(Flow Field) 시각화: ${mode}`);
+        } else if (e.key === "Tab" && engine.flowFieldManager.debugRender) {
+            e.preventDefault();
+            engine.flowFieldManager.debugFaction = engine.flowFieldManager.debugFaction === "red" ? "blue" : "red";
+            showToast(`유동장 표시 진영: ${engine.flowFieldManager.debugFaction.toUpperCase()}`);
         } else if (["1", "2", "3", "4", "5"].includes(key)) {
             const idx = parseInt(key) - 1;
             if (YOUTUBE_PRESETS[idx]) {

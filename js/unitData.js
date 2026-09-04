@@ -14,7 +14,7 @@ export const UNIT_TYPES = {
     rifleman: {
         id: "rifleman",
         name: "소총수",
-        desc: "안정적인 사거리와 연사력을 가진 기본 보병",
+        desc: "안정적인 사거리와 연사력을 가진 기본 보병 (0.5칸 2열 통과)",
         faction: "blue",
         role: "ranged",
         icon: "🪖",
@@ -22,7 +22,7 @@ export const UNIT_TYPES = {
         // 전투 스탯
         hp: 100,
         speed: 1.8,
-        radius: 10,
+        radius: 11, // 0.5칸 규격 (직경 22px, 1칸 복도 2열 종대 통과 가능)
         sightRange: 380,
         attackRange: 320,
         damage: 18,
@@ -39,7 +39,7 @@ export const UNIT_TYPES = {
         // 외형 디자인 (2.5D 실루엣)
         shape: "soldier",
         color: "#0ea5e9",
-        barrelLength: 14,
+        barrelLength: 15,
         hasHelmet: true,
         cost: 10
     },
@@ -54,7 +54,7 @@ export const UNIT_TYPES = {
         
         hp: 170,
         speed: 1.6,
-        radius: 12,
+        radius: 13, // 중장갑 방탄복 (직경 26px)
         sightRange: 280,
         attackRange: 200,
         damage: 12,        // 펠릿 당 데미지
@@ -71,7 +71,7 @@ export const UNIT_TYPES = {
         
         shape: "heavy_soldier",
         color: "#0284c7",
-        barrelLength: 12,
+        barrelLength: 14,
         barrelWidth: 5,
         hasVest: true,
         cost: 25
@@ -87,7 +87,7 @@ export const UNIT_TYPES = {
         
         hp: 75,
         speed: 1.4,
-        radius: 9,
+        radius: 10, // 슬림형 정밀 사수 (직경 20px)
         sightRange: 600,
         attackRange: 550,
         damage: 150,
@@ -104,7 +104,7 @@ export const UNIT_TYPES = {
         
         shape: "sniper_soldier",
         color: "#38bdf8",
-        barrelLength: 20,
+        barrelLength: 22,
         cost: 35
     },
 
@@ -118,7 +118,7 @@ export const UNIT_TYPES = {
         
         hp: 140,
         speed: 1.5,
-        radius: 11,
+        radius: 12, // 0.5칸 규격 (직경 24px)
         sightRange: 260,
         attackRange: 180,
         damage: 8,         // 틱당 데미지
@@ -134,7 +134,7 @@ export const UNIT_TYPES = {
         
         shape: "tank_soldier", // 등 뒤에 노란 연료통
         color: "#f59e0b",
-        barrelLength: 15,
+        barrelLength: 16,
         hasFuelTank: true,
         cost: 30
     },
@@ -142,14 +142,14 @@ export const UNIT_TYPES = {
     minigunner: {
         id: "minigunner",
         name: "미니건 터렛포",
-        desc: "거치형 중화기, 초당 22발 난사로 화력 탄막 형성",
+        desc: "거치형 중화기, 초당 20발 난사로 화력 탄막 형성 (0.75칸 중형)",
         faction: "blue",
         role: "ranged",
         icon: "⚙️",
         
         hp: 250,
         speed: 0.7,        // 무거워서 이동이 매우 느림
-        radius: 14,
+        radius: 18,        // 중형 고정 터렛 (직경 36px)
         sightRange: 400,
         attackRange: 350,
         damage: 14,
@@ -165,7 +165,7 @@ export const UNIT_TYPES = {
         
         shape: "minigun_turret",
         color: "#1e293b",
-        barrelLength: 18,
+        barrelLength: 22,
         cost: 60
     },
 
@@ -179,7 +179,7 @@ export const UNIT_TYPES = {
         
         hp: 90,
         speed: 1.3,
-        radius: 10,
+        radius: 12, // 0.5칸 규격 (직경 24px)
         sightRange: 480,
         attackRange: 420,
         damage: 160,
@@ -195,7 +195,7 @@ export const UNIT_TYPES = {
         
         shape: "bazooka_soldier",
         color: "#0369a1",
-        barrelLength: 16,
+        barrelLength: 18,
         barrelWidth: 5,
         cost: 45
     },
@@ -203,14 +203,14 @@ export const UNIT_TYPES = {
     titan: {
         id: "titan",
         name: "메카 타이탄 (보스)",
-        desc: "초거대 결전 병기. 발로 짓밟고 트윈 레이저 빔 소거",
+        desc: "초거대 결전 병기. 발로 짓밟고 트윈 레이저 빔 소거 (2x2칸 보스 규격)",
         faction: "blue",
         role: "boss",
         icon: "🤖",
         
         hp: 3500,
         speed: 1.1,
-        radius: 28,        // 압도적인 거대 크기
+        radius: 44,        // 2x2 타일(96px)을 장악하는 웅장한 크기 (직경 88px)
         sightRange: 500,
         attackRange: 450,
         damage: 60,
@@ -233,16 +233,16 @@ export const UNIT_TYPES = {
     runner: {
         id: "runner",
         name: "러너 좀비",
-        desc: "빠른 이동 속도로 떼를 지어 덮치는 표준 감염체",
+        desc: "빠른 이동 속도로 떼를 지어 덮치는 표준 감염체 (0.5칸 2열 통과)",
         faction: "red",
         role: "melee",
         icon: "🧟",
         
         hp: 70,
         speed: 2.5,
-        radius: 9,
+        radius: 11, // 0.5칸 규격 (직경 22px, 1칸 복도 2열 종대 통과)
         sightRange: 400,
-        attackRange: 16,
+        attackRange: 18,
         damage: 16,
         attackSpeed: 1.8,
         
@@ -256,18 +256,18 @@ export const UNIT_TYPES = {
     brute: {
         id: "brute",
         name: "탱커 브루트",
-        desc: "거대한 맷집과 파괴력, 주먹 강타로 아군/적군 날려버림",
+        desc: "거대한 맷집과 파괴력. 1칸 통로를 온몸으로 틀어막는 1.0칸 전담 탱커",
         faction: "red",
         role: "tanker",
         icon: "👹",
         
         hp: 950,
         speed: 1.3,
-        radius: 20,
+        radius: 22, // 1.0칸 탱커 규격 (직경 44px, 48px 초크포인트를 완벽히 길막)
         sightRange: 450,
-        attackRange: 28,
+        attackRange: 32,
         damage: 65,
-        slamRadius: 40,    // 주변 광역 넉백 강타
+        slamRadius: 48,    // 주변 광역 넉백 강타
         attackSpeed: 0.8,
         knockbackImmunity: 0.85,
         
@@ -280,18 +280,18 @@ export const UNIT_TYPES = {
     exploder: {
         id: "exploder",
         name: "자폭체",
-        desc: "접근 시 붉게 박동(Pulsing)하다 대폭발, 연쇄 폭발 유발",
+        desc: "접근 시 붉게 박동하다 대폭발, 연쇄 폭발 유발",
         faction: "red",
         role: "suicide",
         icon: "💣",
         
         hp: 85,
         speed: 2.9,        // 달려와서 자폭
-        radius: 11,
+        radius: 13, // 부풀어 오른 0.55칸 규격 (직경 26px)
         sightRange: 450,
-        attackRange: 22,
+        attackRange: 24,
         damage: 220,
-        explosionRadius: 85,
+        explosionRadius: 90,
         pulseGlow: true,   // 폭발 직전 붉은색 고동 이펙트
         
         weapon: "self_destruct",
@@ -310,7 +310,7 @@ export const UNIT_TYPES = {
         
         hp: 110,
         speed: 1.7,
-        radius: 10,
+        radius: 12, // 0.5칸 규격 (직경 24px)
         sightRange: 420,
         attackRange: 340,
         damage: 25,
@@ -331,16 +331,16 @@ export const UNIT_TYPES = {
     crawler: {
         id: "crawler",
         name: "스웜 크롤러",
-        desc: "작고 극도로 빠름. 수천 마리가 파도처럼 쏟아지는 물량체",
+        desc: "작고 극도로 빠름. 1칸에 9마리가 물밀듯 파도치는 극소형 물량체",
         faction: "red",
         role: "swarm",
         icon: "🕷️",
         
         hp: 30,
         speed: 3.2,
-        radius: 6,         // 매우 작음
+        radius: 7,         // 극소형 스웜 (직경 14px)
         sightRange: 420,
-        attackRange: 12,
+        attackRange: 14,
         damage: 8,
         attackSpeed: 2.2,
         

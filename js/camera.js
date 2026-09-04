@@ -14,8 +14,8 @@ export class Camera {
         this.x = CONFIG.WORLD.WIDTH / 2;
         this.y = CONFIG.WORLD.HEIGHT / 2;
         this.zoom = 1.0;
-        this.minZoom = 0.35;
-        this.maxZoom = 2.5;
+        this.minZoom = 0.15;
+        this.maxZoom = 3.0;
 
         // 드래그 패닝 상태
         this.isDragging = false;

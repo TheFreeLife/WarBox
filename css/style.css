@@ -229,6 +229,109 @@ body.clean-recording-mode .modal-overlay {
     box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
 }
 
+/* =========================================================
+   단축키 가이드 팝업 모달 (토글형)
+   ========================================================= */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(2, 6, 23, 0.72);
+    backdrop-filter: blur(8px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 500;
+    transition: opacity 0.2s ease;
+}
+
+.modal-overlay.hidden {
+    display: none !important;
+}
+
+.shortcuts-card {
+    background: rgba(15, 23, 42, 0.94);
+    border: 1px solid var(--panel-border);
+    backdrop-filter: blur(24px);
+    border-radius: 16px;
+    padding: 20px 24px;
+    width: min(92vw, 680px);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    color: var(--text-main);
+    animation: modalFadeIn 0.16s ease-out;
+}
+
+@keyframes modalFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.shortcuts-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+    margin-top: 14px;
+}
+
+@media (max-width: 640px) {
+    .shortcuts-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.shortcut-category {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent-blue);
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+    margin-bottom: 8px;
+}
+
+.shortcut-col {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.shortcut-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11.5px;
+    color: var(--text-dim);
+}
+
+.shortcut-item span:last-child {
+    color: #e2e8f0;
+}
+
+.kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 19px;
+    padding: 0 6px;
+    background: rgba(30, 41, 59, 0.95);
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--accent-yellow);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    white-space: nowrap;
+}
+
 .bottom-row {
     display: flex;
     justify-content: space-between;
@@ -493,4 +596,78 @@ input[type="range"] {
     border-color: var(--accent-blue);
     color: #e0f2fe;
     box-shadow: 0 0 24px var(--accent-blue-glow), 0 12px 36px rgba(0, 0, 0, 0.6);
+}
+
+/* =========================================================
+   단축키 안내 팝업 모달 (글래스모피즘 오버레이)
+   ========================================================= */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(2, 6, 23, 0.75);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 200;
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.2s ease, visibility 0.2s;
+}
+
+.modal-overlay.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.shortcuts-card {
+    background: rgba(15, 23, 42, 0.95);
+    border: 1px solid var(--panel-border);
+    backdrop-filter: blur(20px);
+    border-radius: 14px;
+    padding: 24px;
+    width: 580px;
+    max-width: 90vw;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(14, 165, 233, 0.15);
+    transform: scale(1);
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal-overlay.hidden .shortcuts-card {
+    transform: scale(0.95);
+}
+
+.shortcuts-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-top: 14px;
+}
+
+.shortcut-col {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.shortcut-category {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent-blue);
+    border-bottom: 1px solid var(--panel-border);
+    padding-bottom: 6px;
+    margin-bottom: 4px;
+}
+
+.shortcut-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11.5px;
+    color: var(--text-main);
 }
