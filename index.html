@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>워박스 (WarBox) - 대규모 군단 배틀 시뮬레이터</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Google Fonts Pretendard 대체 fallback -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700;800&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <!-- 뷰포트 컨테이너 (16:9 ↔ 9:16 유튜브 쇼츠 반응형) -->
+    <div id="viewport-container" data-ratio="16:9">
+        <canvas id="main-canvas"></canvas>
+
+        <!-- 1. 상단 HUD (실시간 스코어보드, 성능 프로파일러, 녹화 도구) -->
+        <header id="top-hud">
+            <!-- 🔵 블루 진영 스코어 -->
+            <div class="hud-group">
+                <div class="hud-card score-blue">
+                    <span>🔵 BLUE 생존:</span>
+                    <span id="blue-count" class="hud-value">0</span>
+                    <span style="font-size:11px; color:#94a3b8;">(Kills: <span id="blue-kills">0</span>)</span>
+                </div>
+            </div>
+
+            <!-- ⚡ 중앙 컨트롤 및 성능 프로파일러 -->
+            <div class="hud-group">
+                <div class="perf-badge">
+                    <span id="perf-fps">60 FPS</span> | <span id="perf-ms">2.1ms</span> | <span id="total-units">0
+                        Units</span>
+                </div>
+
+                <div class="btn-icon-group">
+                    <button id="btn-pause" class="btn-tactical" title="일시정지 (Space)">⏸️ 정지</button>
+                    <button id="btn-slowmo" class="btn-tactical" title="슬로우 모션 (Z)">🐢 0.2x</button>
+                    <button id="btn-fast" class="btn-tactical" title="고속 배속 (X)">⚡ 2.5x</button>
+                    <button id="btn-aspect" class="btn-tactical" title="16:9 / 9:16 쇼츠 비율 전환 (R)">📱 16:9</button>
+                    <button id="btn-clean" class="btn-tactical" style="color:#38bdf8;" title="녹화용 UI 숨기기 (H)">🎥
+                        녹화뷰(H)</button>
+                    <button id="btn-clear" class="btn-tactical" style="color:#ef4444;" title="전체 삭제 (C)">🗑️
+                        클리어</button>
+                </div>
+            </div>
+
+            <!-- 🔴 레드 진영 스코어 -->
+            <div class="hud-group">
+                <div class="hud-card score-red">
+                    <span style="font-size:11px; color:#94a3b8;">(Kills: <span id="red-kills">0</span>)</span>
+                    <span id="red-count" class="hud-value">0</span>
+                    <span>:RED 생존 🔴</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- 2. 시나리오 타임라인 바 -->
+        <div id="scenario-bar">
+            <span>🎬 시나리오: <strong id="scenario-title" style="color:#38bdf8;">외곽 전초기지</strong></span>
+            <span class="timeline-time" id="scenario-time">00:00</span>
+            <span class="timeline-next" id="scenario-next">Next: [5s] 1차 웨이브 급습</span>
+        </div>
+
+        <!-- 3. 하단 단축키 가이드 힌트 -->
+        <div class="shortcut-hint">
+            <span><span class="kbd">H</span> 녹화 클린뷰</span>
+            <span><span class="kbd">Space</span> 정지</span>
+            <span><span class="kbd">Z</span> 0.2x 슬로우</span>
+            <span><span class="kbd">X</span> 배속</span>
+            <span><span class="kbd">R</span> 쇼츠 비율</span>
+            <span><span class="kbd">1~5</span> 프리셋 로드</span>
+            <span><span class="kbd">휠/우클릭</span> 줌 & 패닝</span>
+        </div>
+
+        <!-- 4. 하단 샌드박스 도크 바 -->
+        <footer id="bottom-bar">
+            <div class="bottom-row">
+                <!-- 진영 선택 및 스폰 슬라이더 -->
+                <div style="display:flex; align-items:center; gap:16px;">
+                    <div class="faction-toggle">
+                        <button id="faction-blue-btn" class="faction-btn blue active">🔵 BLUE 군대</button>
+                        <button id="faction-red-btn" class="faction-btn red">🔴 RED 감염체</button>
+                    </div>
+
+                    <div class="slider-group">
+                        <span>브러시 반경:</span>
+                        <input type="range" id="brush-radius" min="10" max="150" value="45">
+                        <span id="brush-radius-val">45px</span>
+                    </div>
+
+                    <div class="slider-group">
+                        <span>스폰 수량:</span>
+                        <input type="range" id="brush-count" min="1" max="100" value="10">
+                        <span id="brush-count-val">10마리</span>
+                    </div>
+                </div>
+
+                <!-- 도구 패널 토글 버튼들 -->
+                <div style="display:flex; gap:8px;">
+                    <button id="btn-toggle-editor" class="btn-tactical">🧱 맵 에디터 (E)</button>
+                    <button id="btn-toggle-tweaker" class="btn-tactical">🎛️ 변수 조절 (T)</button>
+                </div>
+            </div>
+
+            <!-- 동적 유닛 선택 덱 (unitData.js와 자동 연동) -->
+            <div class="bottom-row">
+                <div class="unit-deck" id="unit-deck-container">
+                    <!-- JS에서 UNIT_TYPES 기준으로 자동 생성됩니다 -->
+                </div>
+            </div>
+        </footer>
+
+        <!-- 5. 맵 에디터 사이드 패널 -->
+        <aside id="map-editor-panel" class="side-panel hidden">
+            <div class="panel-title">
+                <span>🧱 인게임 맵 에디터</span>
+                <button id="close-editor-btn"
+                    style="background:none; border:none; color:#94a3b8; cursor:pointer;">✕</button>
+            </div>
+            <div class="tool-grid">
+                <button class="tool-btn active" data-map-tool="wall">🧱 콘크리트 벽</button>
+                <button class="tool-btn" data-map-tool="barricade">🚧 바리케이드</button>
+                <button class="tool-btn" data-map-tool="mine">💣 폭발 지뢰</button>
+                <button class="tool-btn" data-map-tool="spawner">🌀 좀비 포탈</button>
+                <button class="tool-btn" data-map-tool="eraser" style="grid-column: span 2; color:#ef4444;">🧹 지우개
+                    (삭제)</button>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">
+                <button id="btn-export-map" class="btn-tactical" style="justify-content:center;">💾 맵 JSON 내보내기</button>
+                <button id="btn-clear-map" class="btn-tactical" style="justify-content:center; color:#ef4444;">🗑️ 모든
+                    장애물 제거</button>
+            </div>
+        </aside>
+
+        <!-- 6. 시뮬레이터 조절기 사이드 패널 -->
+        <aside id="tweaker-panel" class="side-panel hidden">
+            <div class="panel-title">
+                <span>🎛️ 시뮬레이터 변수 조절</span>
+                <button id="close-tweaker-btn"
+                    style="background:none; border:none; color:#94a3b8; cursor:pointer;">✕</button>
+            </div>
+            <div class="toggle-row">
+                <span>🧟 좀비 감염 모드 (인간 감염):</span>
+                <input type="checkbox" id="toggle-infection" checked>
+            </div>
+            <div class="slider-group" style="flex-direction:column; align-items:flex-start;">
+                <div style="display:flex; justify-content:space-between; width:100%;">
+                    <span>넉백 배율:</span>
+                    <span id="knockback-val">1.0x</span>
+                </div>
+                <input type="range" id="slider-knockback" min="0" max="4" step="0.5" value="1" style="width:100%;">
+            </div>
+            <div style="border-top:1px solid var(--panel-border); padding-top:10px;">
+                <span style="font-size:12px; font-weight:bold; color:var(--accent-yellow);">⚡ 신의 권능 (God Mode):</span>
+                <div style="display:flex; gap:6px; margin-top:8px;">
+                    <button id="btn-god-nuke" class="btn-tactical"
+                        style="flex:1; justify-content:center; color:#f43f5e;">☢️ 전술 핵</button>
+                    <button id="btn-god-blackhole" class="btn-tactical"
+                        style="flex:1; justify-content:center; color:#c084fc;">🕳️ 블랙홀</button>
+                </div>
+            </div>
+            <div style="border-top:1px solid var(--panel-border); padding-top:10px;">
+                <span style="font-size:12px; font-weight:bold;">🎬 유튜브 시나리오 프리셋:</span>
+                <div style="display:flex; flex-direction:column; gap:6px; margin-top:8px;"
+                    id="preset-buttons-container">
+                    <!-- JS에서 프리셋 버튼 생성 -->
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- 메인 진입점 모듈 스크립트 -->
+    <script type="module" src="js/main.js"></script>
+</body>
+
+</html>

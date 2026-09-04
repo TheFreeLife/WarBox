@@ -1,0 +1,9 @@
+{
+  "name": "warbox",
+  "version": "1.0.0",
+  "description": "WarBox - Mass Battle Sandbox Simulator for YouTube & Shorts",
+  "type": "module",
+  "scripts": {
+    "start": "npx serve ."
+  }
+}

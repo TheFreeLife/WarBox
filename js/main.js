@@ -1,0 +1,391 @@
+/**
+ * main.js - 애플리케이션 진입점 및 UI 이벤트 바인딩
+ * 
+ * - BattleEngine 초기화
+ * - unitData.js 기반 동적 유닛 선택 덱 렌더링
+ * - 마우스 드래그 스폰, 우클릭 패닝, 휠 줌
+ * - 유튜브 녹화 단축키 (H, Space, Z, X, R, C, 1~5) 지원
+ */
+
+import { BattleEngine } from './engine.js';
+import { UNIT_TYPES, BLUE_UNITS, RED_UNITS } from './unitData.js';
+import { YOUTUBE_PRESETS } from './presets.js';
+import { soundFX } from './audio.js';
+
+window.addEventListener("DOMContentLoaded", () => {
+    const canvas = document.getElementById("main-canvas");
+    const viewportContainer = document.getElementById("viewport-container");
+
+    // 1. 엔진 초기화 및 시작
+    const engine = new BattleEngine(canvas, viewportContainer);
+    engine.start();
+
+    // 현재 선택된 상태
+    let selectedFaction = "blue";
+    let selectedUnitId = "rifleman";
+    let brushRadius = 45;
+    let brushCount = 10;
+    let activeGodPower = null;
+
+    // 2. 동적 유닛 덱 생성 (unitData.js와 자동 연동)
+    const unitDeckContainer = document.getElementById("unit-deck-container");
+
+    function renderUnitDeck() {
+        unitDeckContainer.innerHTML = "";
+        const units = selectedFaction === "blue" ? BLUE_UNITS : RED_UNITS;
+
+        units.forEach(unit => {
+            const card = document.createElement("div");
+            card.className = `unit-card ${selectedFaction === "blue" ? "faction-blue" : "faction-red"}`;
+            if (unit.id === selectedUnitId) card.classList.add("active");
+
+            card.innerHTML = `
+                <span class="unit-icon">${unit.icon || "⚔️"}</span>
+                <span class="unit-name">${unit.name}</span>
+                <span class="unit-cost">HP ${unit.hp} | 사거리 ${unit.attackRange || 20}</span>
+            `;
+
+            card.addEventListener("click", () => {
+                selectedUnitId = unit.id;
+                activeGodPower = null;
+                document.querySelectorAll(".unit-card").forEach(c => c.classList.remove("active"));
+                card.classList.add("active");
+            });
+
+            unitDeckContainer.appendChild(card);
+        });
+    }
+
+    renderUnitDeck();
+
+    // 3. 진영 선택 토글
+    const blueBtn = document.getElementById("faction-blue-btn");
+    const redBtn = document.getElementById("faction-red-btn");
+
+    blueBtn.addEventListener("click", () => {
+        selectedFaction = "blue";
+        selectedUnitId = "rifleman";
+        blueBtn.classList.add("active");
+        redBtn.classList.remove("active");
+        renderUnitDeck();
+    });
+
+    redBtn.addEventListener("click", () => {
+        selectedFaction = "red";
+        selectedUnitId = "runner";
+        redBtn.classList.add("active");
+        blueBtn.classList.remove("active");
+        renderUnitDeck();
+    });
+
+    // 4. 슬라이더 바인딩
+    const brushRadiusInput = document.getElementById("brush-radius");
+    const brushRadiusVal = document.getElementById("brush-radius-val");
+    brushRadiusInput.addEventListener("input", (e) => {
+        brushRadius = parseInt(e.target.value);
+        brushRadiusVal.textContent = `${brushRadius}px`;
+    });
+
+    const brushCountInput = document.getElementById("brush-count");
+    const brushCountVal = document.getElementById("brush-count-val");
+    brushCountInput.addEventListener("input", (e) => {
+        brushCount = parseInt(e.target.value);
+        brushCountVal.textContent = `${brushCount}마리`;
+    });
+
+    // 5. 마우스 상호작용 (스폰, 맵 에디팅, 패닝)
+    let isLeftMouseDown = false;
+    let isRightMouseDown = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let camStartX = 0;
+    let camStartY = 0;
+    let lastSpawnTime = 0;
+
+    // 첫 클릭 시 오디오 컨텍스트 활성화
+    window.addEventListener("click", () => soundFX.init(), { once: true });
+
+    canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+
+    canvas.addEventListener("mousedown", (e) => {
+        soundFX.init();
+        const worldPos = engine.camera.screenToWorld(e.clientX, e.clientY);
+
+        if (e.button === 0) {
+            // 좌클릭
+            isLeftMouseDown = true;
+
+            // 신의 권능 발동 모드인 경우
+            if (activeGodPower === "nuke") {
+                engine.tweaker.triggerNuke(worldPos.x, worldPos.y);
+                activeGodPower = null;
+                return;
+            } else if (activeGodPower === "blackhole") {
+                engine.tweaker.triggerBlackHole(worldPos.x, worldPos.y);
+                activeGodPower = null;
+                return;
+            }
+
+            // 맵 에디터 활성화 상태인 경우
+            if (engine.mapEditor.active) {
+                engine.mapEditor.handleMouseDown(worldPos.x, worldPos.y);
+                return;
+            }
+
+            // 일반 유닛 브러시 스폰
+            engine.unitManager.spawnBrush(
+                selectedUnitId,
+                worldPos.x,
+                worldPos.y,
+                brushRadius,
+                brushCount,
+                selectedFaction
+            );
+        } else if (e.button === 1 || e.button === 2) {
+            // 휠 클릭 또는 우클릭: 카메라 패닝
+            isRightMouseDown = true;
+            dragStartX = e.clientX;
+            dragStartY = e.clientY;
+            camStartX = engine.camera.x;
+            camStartY = engine.camera.y;
+        }
+    });
+
+    window.addEventListener("mousemove", (e) => {
+        const worldPos = engine.camera.screenToWorld(e.clientX, e.clientY);
+
+        if (isLeftMouseDown) {
+            if (engine.mapEditor.active) {
+                engine.mapEditor.handleMouseMove(worldPos.x, worldPos.y);
+            } else if (!activeGodPower) {
+                // 마우스 드래그로 연속 스폰 (0.08초 간격 스로틀링)
+                const now = performance.now();
+                if (now - lastSpawnTime > 80) {
+                    lastSpawnTime = now;
+                    engine.unitManager.spawnBrush(
+                        selectedUnitId,
+                        worldPos.x,
+                        worldPos.y,
+                        brushRadius,
+                        Math.max(1, Math.round(brushCount / 3)),
+                        selectedFaction
+                    );
+                }
+            }
+        }
+
+        if (isRightMouseDown) {
+            const dx = (e.clientX - dragStartX) / engine.camera.zoom;
+            const dy = (e.clientY - dragStartY) / engine.camera.zoom;
+            engine.camera.x = camStartX - dx;
+            engine.camera.y = camStartY - dy;
+        }
+    });
+
+    window.addEventListener("mouseup", (e) => {
+        const worldPos = engine.camera.screenToWorld(e.clientX, e.clientY);
+        if (e.button === 0) {
+            isLeftMouseDown = false;
+            if (engine.mapEditor.active) {
+                engine.mapEditor.handleMouseUp(worldPos.x, worldPos.y);
+            }
+        } else if (e.button === 1 || e.button === 2) {
+            isRightMouseDown = false;
+        }
+    });
+
+    canvas.addEventListener("wheel", (e) => {
+        e.preventDefault();
+        engine.camera.zoomAt(e.clientX, e.clientY, -e.deltaY);
+    }, { passive: false });
+
+    // 6. 상단 버튼 바인딩
+    const btnPause = document.getElementById("btn-pause");
+    btnPause.addEventListener("click", () => {
+        const paused = engine.togglePause();
+        btnPause.textContent = paused ? "▶️ 재생" : "⏸️ 정지";
+        btnPause.classList.toggle("active", paused);
+    });
+
+    const btnSlowMo = document.getElementById("btn-slowmo");
+    btnSlowMo.addEventListener("click", () => {
+        const scale = engine.toggleSlowMo();
+        btnSlowMo.classList.toggle("active", scale === 0.2);
+    });
+
+    const btnFast = document.getElementById("btn-fast");
+    btnFast.addEventListener("click", () => {
+        const scale = engine.toggleFastForward();
+        btnFast.classList.toggle("active", scale === 2.5);
+    });
+
+    const btnAspect = document.getElementById("btn-aspect");
+    btnAspect.addEventListener("click", () => {
+        engine.camera.toggleAspectMode();
+        btnAspect.textContent = engine.camera.aspectMode === "16:9" ? "📱 16:9" : "🎬 9:16 쇼츠";
+    });
+
+    const btnClean = document.getElementById("btn-clean");
+    btnClean.addEventListener("click", () => {
+        engine.toggleCleanRecording();
+    });
+
+    const btnClear = document.getElementById("btn-clear");
+    btnClear.addEventListener("click", () => {
+        engine.clearAll();
+    });
+
+    // 7. 사이드 패널 토글 (맵 에디터 & 변수 조절기)
+    const mapPanel = document.getElementById("map-editor-panel");
+    const tweakerPanel = document.getElementById("tweaker-panel");
+    const btnToggleEditor = document.getElementById("btn-toggle-editor");
+    const btnToggleTweaker = document.getElementById("btn-toggle-tweaker");
+
+    btnToggleEditor.addEventListener("click", () => {
+        const isHidden = mapPanel.classList.toggle("hidden");
+        engine.mapEditor.toggleActive(!isHidden);
+        btnToggleEditor.classList.toggle("active", !isHidden);
+    });
+
+    document.getElementById("close-editor-btn").addEventListener("click", () => {
+        mapPanel.classList.add("hidden");
+        engine.mapEditor.toggleActive(false);
+        btnToggleEditor.classList.remove("active");
+    });
+
+    btnToggleTweaker.addEventListener("click", () => {
+        const isHidden = tweakerPanel.classList.toggle("hidden");
+        btnToggleTweaker.classList.toggle("active", !isHidden);
+    });
+
+    document.getElementById("close-tweaker-btn").addEventListener("click", () => {
+        tweakerPanel.classList.add("hidden");
+        btnToggleTweaker.classList.remove("active");
+    });
+
+    // 맵 에디터 도구 선택
+    document.querySelectorAll("[data-map-tool]").forEach(btn => {
+        btn.addEventListener("click", () => {
+            document.querySelectorAll("[data-map-tool]").forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            engine.mapEditor.setTool(btn.getAttribute("data-map-tool"));
+        });
+    });
+
+    document.getElementById("btn-export-map").addEventListener("click", () => {
+        engine.mapEditor.exportMapToFile();
+    });
+
+    document.getElementById("btn-clear-map").addEventListener("click", () => {
+        engine.mapManager.clear();
+    });
+
+    // 변수 조절기 설정 바인딩
+    const toggleInfection = document.getElementById("toggle-infection");
+    toggleInfection.addEventListener("change", (e) => {
+        engine.tweaker.setInfectionMode(e.target.checked);
+    });
+
+    const sliderKnockback = document.getElementById("slider-knockback");
+    const knockbackVal = document.getElementById("knockback-val");
+    sliderKnockback.addEventListener("input", (e) => {
+        const val = parseFloat(e.target.value);
+        engine.tweaker.setKnockbackScale(val);
+        knockbackVal.textContent = `${val.toFixed(1)}x`;
+    });
+
+    // 신의 권능 버튼
+    document.getElementById("btn-god-nuke").addEventListener("click", () => {
+        activeGodPower = "nuke";
+        alert("원하는 지면을 클릭하면 전술 핵이 투하됩니다!");
+    });
+
+    document.getElementById("btn-god-blackhole").addEventListener("click", () => {
+        activeGodPower = "blackhole";
+        alert("원하는 지면을 클릭하면 블랙홀이 생성됩니다!");
+    });
+
+    // 시나리오 프리셋 버튼 렌더링
+    const presetContainer = document.getElementById("preset-buttons-container");
+    YOUTUBE_PRESETS.forEach(p => {
+        const btn = document.createElement("button");
+        btn.className = "btn-tactical";
+        btn.style.justifyContent = "flex-start";
+        btn.innerHTML = `${p.thumbnailIcon} <strong>[${p.hotkey}]</strong> ${p.title.split(". ")[1]}`;
+        btn.addEventListener("click", () => {
+            engine.scenarioDirector.loadScenario(p.scenarioId);
+            document.getElementById("scenario-title").textContent = p.title.split(". ")[1];
+            tweakerPanel.classList.add("hidden");
+            btnToggleTweaker.classList.remove("active");
+        });
+        presetContainer.appendChild(btn);
+    });
+
+    // 기본 시나리오 자동 로드
+    engine.scenarioDirector.loadScenario("outpost_defense");
+
+    // 8. 전역 키보드 단축키
+    window.addEventListener("keydown", (e) => {
+        const key = e.key.toUpperCase();
+
+        if (key === "H") {
+            engine.toggleCleanRecording();
+        } else if (e.code === "Space") {
+            e.preventDefault();
+            btnPause.click();
+        } else if (key === "Z") {
+            btnSlowMo.click();
+        } else if (key === "X") {
+            btnFast.click();
+        } else if (key === "R") {
+            btnAspect.click();
+        } else if (key === "C") {
+            btnClear.click();
+        } else if (key === "E") {
+            btnToggleEditor.click();
+        } else if (key === "T") {
+            btnToggleTweaker.click();
+        } else if (["1", "2", "3", "4", "5"].includes(key)) {
+            const idx = parseInt(key) - 1;
+            if (YOUTUBE_PRESETS[idx]) {
+                engine.scenarioDirector.loadScenario(YOUTUBE_PRESETS[idx].scenarioId);
+                document.getElementById("scenario-title").textContent = YOUTUBE_PRESETS[idx].title.split(". ")[1];
+            }
+        }
+    });
+
+    // 9. 실시간 HUD 및 통계 업데이트 인터벌
+    const blueCountEl = document.getElementById("blue-count");
+    const redCountEl = document.getElementById("red-count");
+    const blueKillsEl = document.getElementById("blue-kills");
+    const redKillsEl = document.getElementById("red-kills");
+    const perfFpsEl = document.getElementById("perf-fps");
+    const perfMsEl = document.getElementById("perf-ms");
+    const totalUnitsEl = document.getElementById("total-units");
+    const scenarioTimeEl = document.getElementById("scenario-time");
+    const scenarioNextEl = document.getElementById("scenario-next");
+
+    setInterval(() => {
+        blueCountEl.textContent = engine.unitManager.blueCount.toLocaleString();
+        redCountEl.textContent = engine.unitManager.redCount.toLocaleString();
+        blueKillsEl.textContent = engine.unitManager.blueKills.toLocaleString();
+        redKillsEl.textContent = engine.unitManager.redKills.toLocaleString();
+
+        perfFpsEl.textContent = `${engine.fps} FPS`;
+        perfMsEl.textContent = `${engine.frameTimeMs}ms`;
+        totalUnitsEl.textContent = `${engine.unitManager.units.length.toLocaleString()} Units`;
+
+        if (engine.scenarioDirector.currentScenario) {
+            const sec = Math.floor(engine.scenarioDirector.elapsedTime);
+            const m = String(Math.floor(sec / 60)).padStart(2, '0');
+            const s = String(sec % 60).padStart(2, '0');
+            scenarioTimeEl.textContent = `${m}:${s}`;
+            scenarioNextEl.textContent = engine.scenarioDirector.getNextEventInfo();
+        }
+    }, 100);
+
+    // 창 리사이즈 대응
+    window.addEventListener("resize", () => {
+        engine.camera.updateCanvasResolution();
+    });
+});
